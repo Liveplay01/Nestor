@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    html, body { margin: 0; padding: 0; background: transparent; }
+    *, *::before, *::after { box-sizing: border-box; }
+  </style>
+</helmet>
+<div style="width: 100%; height: 100%; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: transparent;">
+  <div style="width: min(86vmin, 600px); aspect-ratio: 1 / 1;">
+    <svg viewBox="0 0 400 400" width="100%" height="100%" style="display: block; overflow: visible;">
+      <defs>
+        <radialGradient id="cupShadow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="rgba(74,45,20,0.30)"></stop>
+          <stop offset="55%" stop-color="rgba(74,45,20,0.14)"></stop>
+          <stop offset="100%" stop-color="rgba(74,45,20,0)"></stop>
+        </radialGradient>
+      </defs>
+      <ellipse cx="200" cy="206" rx="78" ry="62" fill="url(#cupShadow)" style="{{ cupStyle }}"></ellipse>
+      <sc-for list="{{ twigs }}" as="twig" hint-placeholder-count="22">
+        <path d="{{ twig.d }}" style="{{ twig.style }}"></path>
+      </sc-for>
+    </svg>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  get model() {
+    if (this._model) return this._model;
+    const cx = 200, cy = 200;
+    let seed = 20260625 >>> 0;
+    const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    const rr = (a, b) => a + (b - a) * rnd();
+    const palette = ['#b5763f', '#a4632f', '#c98a51', '#8f5326', '#bb8050', '#9c5e2c'];
+    const twigs = [];
+
+    const addTwig = (angle, radius, len, width, tilt, curve, ci) => {
+      const dir = angle + Math.PI / 2 + tilt;
+      const mx = cx + Math.cos(angle) * radius;
+      const my = cy + Math.sin(angle) * radius;
+      const hx = Math.cos(dir) * len / 2, hy = Math.sin(dir) * len / 2;
+      const x0 = mx - hx, y0 = my - hy;
+      const x1 = mx + hx, y1 = my + hy;
+      const px = -Math.sin(dir), py = Math.cos(dir);
+      const ccx = mx + px * curve, ccy = my + py * curve;
+      const d = `M ${x0.toFixed(1)} ${y0.toFixed(1)} Q ${ccx.toFixed(1)} ${ccy.toFixed(1)} ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+      const L = Math.round((Math.hypot(x1 - x0, y1 - y0) + Math.abs(curve)) * 1.22 + 12);
+      twigs.push({ d, width: +width.toFixed(2), color: palette[ci % palette.length], L });
+    };
+
+    // Pass A — structural outer ring
+    const nA = 11;
+    for (let i = 0; i < nA; i++) {
+      const a = (i / nA) * Math.PI * 2 + rr(-0.12, 0.12);
+      addTwig(a, rr(124, 146), rr(150, 192), rr(6.2, 8), rr(-0.22, 0.22), rr(-26, 26), i);
+    }
+    // Pass B — medium weave filling gaps
+    const nB = 14;
+    for (let i = 0; i < nB; i++) {
+      const a = ((i + 0.5) / nB) * Math.PI * 2 + rr(-0.22, 0.22);
+      addTwig(a, rr(96, 138), rr(108, 156), rr(4.2, 6), rr(-0.5, 0.5), rr(-30, 30), i + 2);
+    }
+    // Pass C — secondary weave, denser overlap
+    const nC = 12;
+    for (let i = 0; i < nC; i++) {
+      const a = ((i + 0.25) / nC) * Math.PI * 2 + rr(-0.3, 0.3);
+      addTwig(a, rr(86, 124), rr(92, 134), rr(3.4, 5), rr(-0.6, 0.6), rr(-26, 26), i + 4);
+    }
+    // Pass D — fine inner fibres near the cup
+    const nD = 16;
+    for (let i = 0; i < nD; i++) {
+      const a = rnd() * Math.PI * 2;
+      addTwig(a, rr(70, 104), rr(52, 96), rr(2.2, 3.8), rr(-0.8, 0.8), rr(-16, 18), i + 1);
+    }
+
+    this._model = { twigs };
+    return this._model;
+  }
+
+  componentDidMount() {
+    const { twigs } = this.model;
+    const n = twigs.length;
+    let css = `@keyframes nestCup{0%{opacity:0}30%{opacity:0}68%{opacity:1}88%{opacity:1}96%{opacity:0}100%{opacity:0}}\n`;
+    twigs.forEach((t, i) => {
+      const start = 0.05 + 0.60 * (i / (n - 1));
+      const end = Math.min(start + 0.09, 0.74);
+      const s = (start * 100).toFixed(1);
+      const e = (end * 100).toFixed(1);
+      css += `@keyframes nestDraw${i}{` +
+        `0%{stroke-dashoffset:${t.L};opacity:0}` +
+        `3%{stroke-dashoffset:${t.L};opacity:1}` +
+        `${s}%{stroke-dashoffset:${t.L}}` +
+        `${e}%{stroke-dashoffset:0}` +
+        `88%{stroke-dashoffset:0;opacity:1}` +
+        `96%{stroke-dashoffset:0;opacity:0}` +
+        `100%{stroke-dashoffset:0;opacity:0}}\n`;
+    });
+    let tag = document.getElementById('nest-keyframes');
+    if (!tag) { tag = document.createElement('style'); tag.id = 'nest-keyframes'; document.head.appendChild(tag); }
+    tag.textContent = css;
+  }
+
+  renderVals() {
+    const dur = 5;
+    const { twigs } = this.model;
+    const out = twigs.map((t, i) => ({
+      d: t.d,
+      style: {
+        fill: 'none',
+        stroke: t.color,
+        strokeWidth: t.width,
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+        strokeDasharray: t.L,
+        strokeDashoffset: t.L,
+        animation: `nestDraw${i} ${dur}s ease-in-out infinite`,
+      },
+    }));
+    return {
+      twigs: out,
+      cupStyle: { animation: `nestCup ${dur}s ease-in-out infinite`, opacity: 0 },
+    };
+  }
+}
+</script>
+</body>
+</html>

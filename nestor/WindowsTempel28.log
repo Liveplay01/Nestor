@@ -1,0 +1,10 @@
+=== V28 DETAILED TEST ===
+has _load: function
+has _resolveFilename: function
+require.electron...
+_resolveFilename('electron') = ERROR: Cannot find module 'electron'
+Require stack:
+- C:\etest\main
+THREW: ENOENT: no such file or directory, open 'ERROR: Cannot find module 'electron'
+Re
+DONE

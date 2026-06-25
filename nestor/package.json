@@ -1,0 +1,61 @@
+{
+    "name": "nestor",
+    "version": "1.0.0",
+    "description": "AI-powered personal file manager",
+    "main": "out/main/index.js",
+    "author": "Nestor",
+    "private": true,
+    "scripts": {
+        "dev": "cross-env ELECTRON_RUN_AS_NODE=0 electron-vite dev",
+        "build": "electron-vite build",
+        "preview": "electron-vite preview",
+        "dist": "npm run build && electron-builder",
+        "dist:win": "npm run build && electron-builder --win"
+    },
+    "dependencies": {
+        "chokidar": "^3.6.0",
+        "electron-store": "^8.2.0",
+        "mammoth": "^1.8.0",
+        "ollama": "^0.5.16"
+    },
+    "devDependencies": {
+        "@electron-toolkit/tsconfig": "^2.0.0",
+        "@electron-toolkit/utils": "^4.0.0",
+        "@types/node": "^20.17.0",
+        "@types/react": "^18.3.0",
+        "@types/react-dom": "^18.3.0",
+        "@vitejs/plugin-react": "^4.3.0",
+        "autoprefixer": "^10.4.20",
+        "cross-env": "^10.1.0",
+        "electron": "^28.3.3",
+        "electron-builder": "^25.1.0",
+        "electron-vite": "^2.3.0",
+        "framer-motion": "^11.11.0",
+        "postcss": "^8.4.47",
+        "react": "^18.3.0",
+        "react-dom": "^18.3.0",
+        "tailwindcss": "^3.4.14",
+        "typescript": "^5.6.0",
+        "vite": "^5.4.0",
+        "zustand": "^5.0.0"
+    },
+    "build": {
+        "appId": "com.nestor.app",
+        "productName": "Nestor",
+        "directories": {
+            "output": "dist"
+        },
+        "files": [
+            "out/**/*",
+            "resources/**/*"
+        ],
+        "win": {
+            "target": "nsis",
+            "icon": "resources/icon.ico"
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true
+        }
+    }
+}

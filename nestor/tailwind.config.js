@@ -1,0 +1,83 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: ['./src/renderer/src/**/*.{js,ts,jsx,tsx}'],
+  theme: {
+    extend: {
+      colors: {
+        bg: '#FFFFFF',
+        surface: '#FBFBFC',
+        sidebar: '#F7F7F8',
+        border: {
+          DEFAULT: '#F0F0F2',
+          strong: '#EAEAED'
+        },
+        text: {
+          primary: '#27272A',
+          secondary: '#3F3F46',
+          muted: '#52525B',
+          faint: '#9A9AA2',
+          ghost: '#A0A0A8',
+          hint: '#B4B4BA'
+        },
+        accent: {
+          DEFAULT: '#2563EB',
+          soft: '#2563EB14',
+          focus: '#C7D6F8'
+        },
+        file: {
+          pdf: '#F97316',
+          doc: '#3B82F6',
+          xls: '#22C55E',
+          ppt: '#EF4444',
+          img: '#8B5CF6',
+          other: '#9CA3AF'
+        },
+        dot: {
+          green: '#16A34A',
+          blue: '#2563EB',
+          red: '#EF4444',
+          gray: '#A1A1AA'
+        }
+      },
+      fontFamily: {
+        sans: ['Geist', 'system-ui', '-apple-system', 'sans-serif']
+      },
+      borderRadius: {
+        sm: '6px',
+        md: '8px',
+        btn: '9px',
+        lg: '12px',
+        xl: '14px',
+        '2xl': '16px'
+      },
+      boxShadow: {
+        window: '0 30px 70px -22px rgba(20,22,34,.30), 0 4px 14px -6px rgba(20,22,34,.10)',
+        input: '0 2px 12px -5px rgba(20,22,34,.10)',
+        'input-focus': '0 0 0 3px #2563EB14, 0 2px 12px -5px rgba(20,22,34,.10)',
+        card: '0 1px 3px rgba(20,22,34,.05)'
+      },
+      animation: {
+        'fade-up': 'fadeUp .4s cubic-bezier(.4,0,.2,1) both',
+        'fade-in': 'fadeIn .25s ease both',
+        'dot-1': 'dot 1.2s infinite',
+        'dot-2': 'dot 1.2s infinite .18s',
+        'dot-3': 'dot 1.2s infinite .36s'
+      },
+      keyframes: {
+        fadeUp: {
+          from: { opacity: '0', transform: 'translateY(9px)' },
+          to: { opacity: '1', transform: 'translateY(0)' }
+        },
+        fadeIn: {
+          from: { opacity: '0' },
+          to: { opacity: '1' }
+        },
+        dot: {
+          '0%, 70%, 100%': { transform: 'translateY(0)', opacity: '.35' },
+          '35%': { transform: 'translateY(-4px)', opacity: '1' }
+        }
+      }
+    }
+  },
+  plugins: []
+}

@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{font-family:'Geist',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+  input,button,textarea{font-family:inherit;}
+  ::-webkit-scrollbar{width:11px;height:11px;}
+  ::-webkit-scrollbar-thumb{background:#E0E0E4;border-radius:8px;border:3px solid transparent;background-clip:content-box;}
+  ::-webkit-scrollbar-thumb:hover{background:#CCCCD2;background-clip:content-box;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  @keyframes scFadeUp{from{opacity:0;transform:translateY(9px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes scDot{0%,70%,100%{transform:translateY(0);opacity:.35;}35%{transform:translateY(-4px);opacity:1;}}
+</style>
+</helmet>
+<div style="position:fixed;inset:0;background:#E6E6E9;display:flex;align-items:center;justify-content:center;overflow:hidden;">
+<div ref="{{ fitRef }}" style="transform-origin:center center;flex:none;">
+<div style="width:1440px;height:900px;flex:none;background:#FFFFFF;border:1px solid #E0E0E4;border-radius:14px;box-shadow:0 30px 70px -22px rgba(20,22,34,.30),0 4px 14px -6px rgba(20,22,34,.10);overflow:hidden;display:flex;flex-direction:column;">
+
+  <!-- ============ TITLE BAR ============ -->
+  <div style="height:46px;min-height:46px;display:flex;align-items:center;justify-content:space-between;padding:0 12px 0 16px;border-bottom:1px solid #F0F0F2;background:#FBFBFC;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="width:23px;height:23px;border-radius:7px;background:{{ acc }};display:flex;align-items:center;justify-content:center;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8.5A1.5 1.5 0 0 1 20.5 9.5v7.5A1.5 1.5 0 0 1 19 18.5H4.5A1.5 1.5 0 0 1 3 17V7.5z"/></svg>
+      </div>
+      <span style="font-size:13.5px;font-weight:600;color:#27272A;letter-spacing:-.01em;">{{ name }}</span>
+      <span style="font-size:12.5px;color:#C4C4CA;">/</span>
+      <span style="font-size:12.5px;color:#9A9AA2;">This PC</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:2px;">
+      <div style="width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:default;color:#9A9AA2;transition:background .14s;" style-hover="background:#0000000a;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5 12h14"/></svg>
+      </div>
+      <div style="width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:default;color:#9A9AA2;transition:background .14s;" style-hover="background:#0000000a;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="4.5" y="4.5" width="15" height="15" rx="2.5"/></svg>
+      </div>
+      <div style="width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:default;color:#9A9AA2;transition:all .14s;" style-hover="background:#EF4444;color:#fff;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PANELS ============ -->
+  <div style="flex:1;display:flex;min-height:0;">
+
+    <!-- ---- SIDEBAR ---- -->
+    <div style="width:52px;min-width:52px;border-right:1px solid #F0F0F2;background:#F7F7F8;display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:4px;">
+      <div onClick="{{ goHome }}" style="width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:{{ homeBg }};color:{{ homeColor }};transition:all .14s;" style-hover="background:#0000000a;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5v7.5a1 1 0 0 0 1 1h3.5v-5h7v5H19a1 1 0 0 0 1-1v-7.5"/><path d="M2.5 12L12 3.5l9.5 8.5"/></svg>
+      </div>
+      <div onClick="{{ goFiles }}" style="width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:{{ filesBg }};color:{{ filesColor }};transition:all .14s;" style-hover="background:#0000000a;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8.5A1.5 1.5 0 0 1 20.5 9.5v7.5A1.5 1.5 0 0 1 19 18.5H4.5A1.5 1.5 0 0 1 3 17V7.5z"/></svg>
+      </div>
+      <div onClick="{{ goChat }}" style="width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:{{ chatBg }};color:{{ chatColor }};transition:all .14s;" style-hover="background:#0000000a;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H9.5L5 19v-3.5H4a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z"/></svg>
+      </div>
+      <div style="flex:1;"></div>
+      <div onClick="{{ goSettings }}" style="width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:{{ setBg }};color:{{ setColor }};transition:all .14s;" style-hover="background:#0000000a;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v2.5M12 19v2.5M21.5 12H19M5 12H2.5M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8M18.5 18.5l-1.8-1.8M7.3 7.3L5.5 5.5"/></svg>
+      </div>
+      <div onClick="{{ goHelp }}" style="width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:{{ helpBg }};color:{{ helpColor }};transition:all .14s;" style-hover="background:#0000000a;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.3c-.8.45-1.1.9-1.1 1.9"/><circle cx="12" cy="16.8" r=".7" fill="currentColor" stroke="none"/></svg>
+      </div>
+    </div>
+
+    <!-- ---- FILE TREE ---- -->
+    <div style="width:240px;min-width:240px;border-right:1px solid #F0F0F2;background:#FBFBFC;display:flex;flex-direction:column;min-height:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:15px 14px 9px 16px;">
+        <span style="font-size:13px;font-weight:600;color:#3F3F46;letter-spacing:-.01em;">Files</span>
+        <div style="width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#9A9AA2;transition:background .14s;" style-hover="background:#0000000d;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8.5A1.5 1.5 0 0 1 20.5 9.5V17a1.5 1.5 0 0 1-1.5 1.5H4.5A1.5 1.5 0 0 1 3 17V7.5z"/><path d="M12 11v4M10 13h4"/></svg>
+        </div>
+      </div>
+      <div style="position:relative;margin:0 12px 8px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A8A8AE" stroke-width="1.8" stroke-linecap="round" style="position:absolute;left:9px;top:8px;"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input placeholder="Search files…" style="width:100%;height:30px;padding:0 10px 0 28px;border:1px solid #EAEAED;border-radius:8px;background:#fff;font-size:12.5px;color:#3F3F46;outline:none;transition:border-color .14s,box-shadow .14s;" style-focus="border-color:#C7D6F8;box-shadow:0 0 0 3px #2563EB14;" />
+      </div>
+
+      <div style="flex:1;overflow-y:auto;padding:2px 8px 16px;">
+        <!-- Documents -->
+        <div onClick="{{ toDocuments }}" style="display:flex;align-items:center;gap:5px;padding:5px 6px 5px 6px;border-radius:6px;cursor:pointer;color:#3F3F46;transition:background .12s;" style-hover="background:#0000000a;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9A9AA2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="transform:{{ rotDocuments }};transition:transform .15s;flex:none;"><path d="M9 6l6 6-6 6"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C7C85" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M3 7a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8.5A1.5 1.5 0 0 1 20.5 9.5V17a1.5 1.5 0 0 1-1.5 1.5H4.5A1.5 1.5 0 0 1 3 17V7z"/></svg>
+          <span style="font-size:13px;font-weight:500;">Documents</span>
+        </div>
+        <div style="overflow:hidden;max-height:{{ mhDocuments }};opacity:{{ opDocuments }};transition:max-height .32s cubic-bezier(.4,0,.2,1),opacity .25s ease;">
+          <!-- Tax 2025 -->
+          <div onClick="{{ toTax }}" style="display:flex;align-items:center;gap:5px;padding:5px 6px 5px 24px;border-radius:6px;cursor:pointer;color:#3F3F46;transition:background .12s;" style-hover="background:#0000000a;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9A9AA2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="transform:{{ rotTax }};transition:transform .15s;flex:none;"><path d="M9 6l6 6-6 6"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C7C85" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M3 7a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8.5A1.5 1.5 0 0 1 20.5 9.5V17a1.5 1.5 0 0 1-1.5 1.5H4.5A1.5 1.5 0 0 1 3 17V7z"/></svg>
+            <span style="font-size:13px;font-weight:500;">Tax 2025</span>
+            <span style="width:6px;height:6px;border-radius:50%;background:{{ acc }};margin-left:auto;flex:none;" title="recently created"></span>
+          </div>
+          <div style="overflow:hidden;max-height:{{ mhTax }};opacity:{{ opTax }};transition:max-height .3s cubic-bezier(.4,0,.2,1),opacity .25s ease;">
+            <div style="display:flex;align-items:center;gap:7px;padding:4px 6px 4px 46px;border-radius:6px;cursor:default;transition:background .12s;" style-hover="background:#0000000a;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F97316" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6.5 3.5h7l4 4v12.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5z"/><path d="M13.5 3.5V8h4"/></svg>
+              <span style="font-size:12.5px;color:#52525B;">tax_return_2024.pdf</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:7px;padding:4px 6px 4px 46px;border-radius:6px;cursor:default;transition:background .12s;" style-hover="background:#0000000a;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F97316" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6.5 3.5h7l4 4v12.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5z"/><path d="M13.5 3.5V8h4"/></svg>
+              <span style="font-size:12.5px;color:#52525B;">W2_form.pdf</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:7px;padding:4px 6px 4px 46px;border-radius:6px;cursor:default;transition:background .12s;" style-hover="background:#0000000a;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6.5 3.5h7l4 4v12.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5z"/><path d="M13.5 3.5V8h4"/><path d="M8 12.5h7M8 15.5h7M11.5 12.5v5"/></svg>
+              <span style="font-size:12.5px;color:#52525B;">receipts_2024.xlsx</span>
+            </div>
+          </div>
+          <!-- Work -->
+          <div onClick="{{ toWork }}" style="display:flex;align-items:center;gap:5px;padding:5px 6px 5px 24px;border-radius:6px;cursor:pointer;color:#3F3F46;transition:background .12s;" style-hover="background:#0000000a;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9A9AA2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="transform:{{ rotWork }};transition:transform .15s;flex:none;"><path d="M9 6l6 6-6 6"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C7C85" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M3 7a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8.5A1.5 1.5 0 0 1 20.5 9.5V17a1.5 1.5 0 0 1-1.5 1.5H4.5A1.5 1.5 0 0 1 3 17V7z"/></svg>
+            <span style="font-size:13px;font-weight:500;">Work</span>
+          </div>
+          <div style="overflow:hidden;max-height:{{ mhWork }};opacity:{{ opWork }};transition:max-height .3s cubic-bezier(.4,0,.2,1),opacity .25s ease;">
+            <div style="display:flex;align-items:center;gap:7px;padding:4px 6px 4px 46px;border-radius:6px;cursor:default;transition:background .12s;" style-hover="background:#0000000a;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6.5 3.5h7l4 4v12.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5z"/><path d="M13.5 3.5V8h4"/><path d="M8.5 12.5h6M8.5 15.5h4"/></svg>
+              <span style="font-size:12.5px;color:#52525B;">proposal.docx</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:7px;padding:4px 6px 4px 46px;border-radius:6px;cursor:default;transition:background .12s;" style-hover="background:#0000000a;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6.5 3.5h7l4 4v12.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5z"/><path d="M13.5 3.5V8h4"/><circle cx="11" cy="14" r="2.3"/></svg>
+              <span style="font-size:12.5px;color:#52525B;">Q4_review.pptx</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:7px;padding:4px 6px 4px 46px;border-radius:6px;cursor:default;transition:background .12s;" style-hover="background:#0000000a;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6.5 3.5h7l4 4v12.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5z"/><path d="M13.5 3.5V8h4"/><path d="M8 12.5h7M8 15.5h7M11.5 12.5v5"/></svg>
+              <span style="font-size:12.5px;color:#52525B;">budget.xlsx</span>
+            </div>
+          </div>
+          <!-- notes.md -->
+          <div style="display:flex;align-items:center;gap:7px;padding:4px 6px 4px 28px;border-radius:6px;cursor:default;transition:background .12s;" style-hover="background:#0000000a;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6.5 3.5h7l4 4v12.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5z"/><path d="M13.5 3.5V8h4"/><path d="M8.5 12.5h6M8.5 15.5h4"/></svg>
+            <span style="font-size:12.5px;color:#52525B;">notes.md</span>
+          </div>
+        </div>
+
+        <!-- Downloads -->
+        <div onClick="{{ toDownloads }}" style="display:flex;align-items:center;gap:5px;padding:5px 6px 5px 6px;border-radius:6px;cursor:pointer;color:#3F3F46;transition:background .12s;" style-hover="background:#0000000a;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9A9AA2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="transform:{{ rotDownloads }};transition:transform .15s;flex:none;"><path d="M9 6l6 6-6 6"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C7C85" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M3 7a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8.5A1.5 1.5 0 0 1 20.5 9.5V17a1.5 1.5 0 0 1-1.5 1.5H4.5A1.5 1.5 0 0 1 3 17V7z"/></svg>
+          <span style="font-size:13px;font-weight:500;">Downloads</span>
+        </div>
+        <div style="overflow:hidden;max-height:{{ mhDownloads }};opacity:{{ opDownloads }};transition:max-height .3s cubic-bezier(.4,0,.2,1),opacity .25s ease;">
+          <div style="display:flex;align-items:center;gap:7px;padding:4px 6px 4px 28px;border-radius:6px;cursor:default;transition:background .12s;" style-hover="background:#0000000a;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F97316" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6.5 3.5h7l4 4v12.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5z"/><path d="M13.5 3.5V8h4"/></svg>
+            <span style="font-size:12.5px;color:#52525B;">invoice.pdf</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;padding:4px 6px 4px 28px;border-radius:6px;cursor:default;transition:background .12s;" style-hover="background:#0000000a;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><rect x="4" y="5" width="16" height="14" rx="2.2"/><circle cx="9" cy="10" r="1.4"/><path d="M5 16.5l3.5-3 3 2.2 3-2.7 4.5 3.5"/></svg>
+            <span style="font-size:12.5px;color:#52525B;">screenshot.png</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;padding:4px 6px 4px 28px;border-radius:6px;cursor:default;transition:background .12s;" style-hover="background:#0000000a;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M4 8.5L12 4l8 4.5v7L12 20l-8-4.5z"/><path d="M4 8.5L12 13l8-4.5M12 13v7"/></svg>
+            <span style="font-size:12.5px;color:#52525B;">archive.zip</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;padding:4px 6px 4px 28px;border-radius:6px;cursor:default;transition:background .12s;" style-hover="background:#0000000a;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6.5 3.5h7l4 4v12.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5z"/><path d="M13.5 3.5V8h4"/><path d="M8.5 12.5h6M8.5 15.5h4"/></svg>
+            <span style="font-size:12.5px;color:#52525B;">readme.txt</span>
+          </div>
+        </div>
+
+        <!-- Pictures -->
+        <div onClick="{{ toPictures }}" style="display:flex;align-items:center;gap:5px;padding:5px 6px 5px 6px;border-radius:6px;cursor:pointer;color:#3F3F46;transition:background .12s;" style-hover="background:#0000000a;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9A9AA2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="transform:{{ rotPictures }};transition:transform .15s;flex:none;"><path d="M9 6l6 6-6 6"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C7C85" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M3 7a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8.5A1.5 1.5 0 0 1 20.5 9.5V17a1.5 1.5 0 0 1-1.5 1.5H4.5A1.5 1.5 0 0 1 3 17V7z"/></svg>
+          <span style="font-size:13px;font-weight:500;">Pictures</span>
+        </div>
+        <div style="overflow:hidden;max-height:{{ mhPictures }};opacity:{{ opPictures }};transition:max-height .3s cubic-bezier(.4,0,.2,1),opacity .25s ease;">
+          <div style="display:flex;align-items:center;gap:7px;padding:4px 6px 4px 28px;border-radius:6px;cursor:default;transition:background .12s;" style-hover="background:#0000000a;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><rect x="4" y="5" width="16" height="14" rx="2.2"/><circle cx="9" cy="10" r="1.4"/><path d="M5 16.5l3.5-3 3 2.2 3-2.7 4.5 3.5"/></svg>
+            <span style="font-size:12.5px;color:#52525B;">vacation.jpg</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;padding:4px 6px 4px 28px;border-radius:6px;cursor:default;transition:background .12s;" style-hover="background:#0000000a;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><rect x="4" y="5" width="16" height="14" rx="2.2"/><circle cx="9" cy="10" r="1.4"/><path d="M5 16.5l3.5-3 3 2.2 3-2.7 4.5 3.5"/></svg>
+            <span style="font-size:12.5px;color:#52525B;">logo.svg</span>
+          </div>
+        </div>
+
+        <!-- Desktop -->
+        <div onClick="{{ toDesktop }}" style="display:flex;align-items:center;gap:5px;padding:5px 6px 5px 6px;border-radius:6px;cursor:pointer;color:#3F3F46;transition:background .12s;" style-hover="background:#0000000a;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9A9AA2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="transform:{{ rotDesktop }};transition:transform .15s;flex:none;"><path d="M9 6l6 6-6 6"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C7C85" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M3 7a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8.5A1.5 1.5 0 0 1 20.5 9.5V17a1.5 1.5 0 0 1-1.5 1.5H4.5A1.5 1.5 0 0 1 3 17V7z"/></svg>
+          <span style="font-size:13px;font-weight:500;">Desktop</span>
+        </div>
+        <div style="overflow:hidden;max-height:{{ mhDesktop }};opacity:{{ opDesktop }};transition:max-height .3s cubic-bezier(.4,0,.2,1),opacity .25s ease;">
+          <div style="display:flex;align-items:center;gap:7px;padding:4px 6px 4px 28px;border-radius:6px;cursor:default;transition:background .12s;" style-hover="background:#0000000a;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6.5 3.5h7l4 4v12.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5z"/><path d="M13.5 3.5V8h4"/><path d="M8 12.5h7M8 15.5h7M11.5 12.5v5"/></svg>
+            <span style="font-size:12.5px;color:#52525B;">budget_final.xlsx</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- CHAT (HERO) ---- -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;background:#FFFFFF;">
+      <!-- chat header -->
+      <div style="height:56px;min-height:56px;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 22px;border-bottom:1px solid #F1F1F3;">
+        <div style="display:flex;flex-direction:column;gap:1px;min-width:0;flex:1;">
+          <span style="font-size:14px;font-weight:600;color:#27272A;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Organizing Downloads &amp; Documents</span>
+          <span style="font-size:12px;color:#9A9AA2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">12 files in context · started 2:11 PM</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex:none;">
+          <div style="display:flex;align-items:center;gap:7px;height:29px;padding:0 11px;border:1px solid #EAEAED;border-radius:999px;background:#fff;">
+            <span style="width:6px;height:6px;border-radius:50%;background:#16A34A;box-shadow:0 0 0 3px #16A34A24;flex:none;"></span>
+            <span style="font-size:12px;font-weight:500;color:#52525B;white-space:nowrap;">{{ status }}</span>
+          </div>
+          <div onClick="{{ newChat }}" style="display:flex;align-items:center;gap:6px;height:29px;padding:0 12px;border:1px solid #EAEAED;border-radius:8px;background:#fff;cursor:pointer;color:#52525B;transition:all .14s;" style-hover="background:#FAFAFA;border-color:#E0E0E3;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            <span style="font-size:12.5px;font-weight:500;white-space:nowrap;">New chat</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- messages -->
+      <div ref="{{ msgRef }}" style="flex:1;min-height:0;overflow-y:auto;padding:28px 0;scroll-behavior:smooth;">
+        <sc-if value="{{ hasMsgs }}" hint-placeholder-val="{{ true }}">
+          <div style="max-width:760px;margin:0 auto;padding:0 28px;display:flex;flex-direction:column;gap:26px;">
+            <sc-for list="{{ messages }}" as="m" hint-placeholder-count="4">
+              <div style="animation:scFadeUp .4s cubic-bezier(.4,0,.2,1) both;">
+                <sc-if value="{{ m.isUser }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;justify-content:flex-end;">
+                    <div style="max-width:80%;background:#F4F4F5;color:#27272A;font-size:14px;line-height:1.6;padding:10px 15px;border-radius:16px 16px 5px 16px;">{{ m.text }}</div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ m.isAi }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;gap:12px;">
+                    <div style="width:27px;height:27px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;background:{{ acc }};">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="#fff" stroke="none"><path d="M12 2.6l1.7 5.9 5.9 1.7-5.9 1.7L12 18.4l-1.7-6.5-5.9-1.7 5.9-1.7L12 2.6z"/></svg>
+                    </div>
+                    <div style="flex:1;min-width:0;padding-top:1px;">
+                      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                        <span style="font-size:13px;font-weight:600;color:#27272A;">{{ name }}</span>
+                        <span style="font-size:11.5px;color:#B4B4BA;">{{ m.time }}</span>
+                      </div>
+                      <div style="font-size:14px;line-height:1.65;color:#3F3F46;">{{ m.text }}</div>
+                      <sc-if value="{{ m.hasChips }}" hint-placeholder-val="{{ false }}">
+                        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:13px;">
+                          <sc-for list="{{ m.chips }}" as="c" hint-placeholder-count="0">
+                            <button style="display:inline-flex;align-items:center;gap:7px;height:31px;padding:0 12px 0 10px;border:1px solid #EAEAED;border-radius:8px;background:#fff;cursor:pointer;font-size:12.5px;font-weight:500;color:#3F3F46;transition:all .14s;" style-hover="background:#FAFAFA;border-color:#D9D9DD;box-shadow:0 1px 3px rgba(20,22,34,.05);">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="{{ c.color }}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6.5 3.5h7l4 4v12.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5z"/><path d="M13.5 3.5V8h4"/></svg>
+                              {{ c.name }}
+                            </button>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                      <sc-if value="{{ m.text2 }}" hint-placeholder-val="{{ false }}">
+                        <div style="font-size:14px;line-height:1.65;color:#3F3F46;margin-top:13px;">{{ m.text2 }}</div>
+                      </sc-if>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+            <sc-if value="{{ typing }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;gap:12px;animation:scFadeUp .3s ease both;">
+                <div style="width:27px;height:27px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;background:{{ acc }};">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="#fff" stroke="none"><path d="M12 2.6l1.7 5.9 5.9 1.7-5.9 1.7L12 18.4l-1.7-6.5-5.9-1.7 5.9-1.7L12 2.6z"/></svg>
+                </div>
+                <div style="display:flex;align-items:center;gap:4px;height:27px;padding:0 2px;">
+                  <span style="width:6px;height:6px;border-radius:50%;background:#C4C4CA;animation:scDot 1.2s infinite;"></span>
+                  <span style="width:6px;height:6px;border-radius:50%;background:#C4C4CA;animation:scDot 1.2s infinite .18s;"></span>
+                  <span style="width:6px;height:6px;border-radius:50%;background:#C4C4CA;animation:scDot 1.2s infinite .36s;"></span>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 24px;">
+            <div style="width:50px;height:50px;border-radius:14px;background:{{ accSoft }};display:flex;align-items:center;justify-content:center;margin-bottom:20px;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="{{ acc }}" stroke="none"><path d="M12 2.6l1.7 5.9 5.9 1.7-5.9 1.7L12 18.4l-1.7-6.5-5.9-1.7 5.9-1.7L12 2.6z"/></svg>
+            </div>
+            <div style="font-size:19px;font-weight:600;color:#27272A;letter-spacing:-.01em;margin-bottom:7px;">What should we organize today?</div>
+            <div style="font-size:13.5px;color:#9A9AA2;max-width:380px;line-height:1.55;margin-bottom:24px;">Ask {{ name }} to find, sort, rename, or create files anywhere on your PC. Everything runs locally — nothing leaves this device.</div>
+            <div style="display:flex;flex-wrap:wrap;gap:9px;justify-content:center;max-width:440px;">
+              <button onClick="{{ suggestClean }}" style="height:33px;padding:0 14px;border:1px solid #EAEAED;border-radius:999px;background:#fff;cursor:pointer;font-size:12.5px;font-weight:500;color:#52525B;transition:all .14s;" style-hover="background:#FAFAFA;border-color:#D9D9DD;">Clean up my Downloads</button>
+              <button onClick="{{ suggestTax }}" style="height:33px;padding:0 14px;border:1px solid #EAEAED;border-radius:999px;background:#fff;cursor:pointer;font-size:12.5px;font-weight:500;color:#52525B;transition:all .14s;" style-hover="background:#FAFAFA;border-color:#D9D9DD;">Find my tax documents</button>
+              <button onClick="{{ suggestPhotos }}" style="height:33px;padding:0 14px;border:1px solid #EAEAED;border-radius:999px;background:#fff;cursor:pointer;font-size:12.5px;font-weight:500;color:#52525B;transition:all .14s;" style-hover="background:#FAFAFA;border-color:#D9D9DD;">Organize photos by date</button>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+
+      <!-- input -->
+      <div style="padding:14px 24px 20px;">
+        <div style="max-width:760px;margin:0 auto;">
+          <div style="display:flex;align-items:center;gap:8px;border:1px solid #E6E6E9;border-radius:14px;background:#fff;box-shadow:0 2px 12px -5px rgba(20,22,34,.10);padding:7px 7px 7px 8px;transition:border-color .14s,box-shadow .14s;" style-focus-within="border-color:#C7D6F8;box-shadow:0 0 0 3px #2563EB14,0 2px 12px -5px rgba(20,22,34,.10);">
+            <div style="width:34px;height:34px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#9A9AA2;transition:background .14s;" style-hover="background:#0000000a;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-7.6-12.3"/><path d="M15.5 8.5l-6 6a2.12 2.12 0 0 0 3 3l6.5-6.5a4 4 0 0 0-5.7-5.6L6.5 6"/></svg>
+            </div>
+            <input value="{{ input }}" onInput="{{ onInput }}" onKeyDown="{{ onKey }}" placeholder="Ask {{ name }} to organize, find, or create files…" style="flex:1;min-width:0;height:34px;border:none;outline:none;background:transparent;font-size:14px;color:#27272A;" />
+            <button onClick="{{ send }}" style="width:34px;height:34px;border-radius:9px;flex:none;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;background:{{ sendBg }};color:{{ sendColor }};transition:all .16s;" style-hover="filter:brightness(1.08);" style-active="transform:scale(.9);">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5.5M6 11l6-6 6 6"/></svg>
+            </button>
+          </div>
+          <div style="text-align:center;font-size:11.5px;color:#B4B4BA;margin-top:10px;">{{ name }} can read and organize files on your PC · Your data never leaves this device</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- ACTIVITY LOG ---- -->
+    <div style="width:260px;min-width:260px;border-left:1px solid #F0F0F2;background:#FBFBFC;display:flex;flex-direction:column;overflow-y:auto;">
+
+      <!-- Anchor Points -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 16px 8px;">
+        <span style="font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:#A0A0A8;">Anchor Points</span>
+        <span style="font-size:11px;font-weight:600;color:#B4B4BA;background:#F0F0F2;border-radius:5px;padding:1px 6px;">2</span>
+      </div>
+      <div style="padding:0 8px 6px;">
+        <div style="display:flex;gap:9px;align-items:flex-start;padding:8px;border-radius:8px;cursor:pointer;transition:background .12s;" style-hover="background:#0000000a;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="{{ acc }}" stroke="none" style="flex:none;margin-top:1px;"><path d="M6 3.5h12a.5.5 0 0 1 .5.5v16l-6.5-4.3L5.5 20V4a.5.5 0 0 1 .5-.5z"/></svg>
+          <div style="min-width:0;">
+            <div style="font-size:12.5px;font-weight:500;color:#3F3F46;line-height:1.4;">Grouped 47 Downloads files</div>
+            <div style="font-size:11.5px;color:#A0A0A8;margin-top:1px;">2:12 PM</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:9px;align-items:flex-start;padding:8px;border-radius:8px;cursor:pointer;transition:background .12s;" style-hover="background:#0000000a;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="{{ acc }}" stroke="none" style="flex:none;margin-top:1px;"><path d="M6 3.5h12a.5.5 0 0 1 .5.5v16l-6.5-4.3L5.5 20V4a.5.5 0 0 1 .5-.5z"/></svg>
+          <div style="min-width:0;">
+            <div style="font-size:12.5px;font-weight:500;color:#3F3F46;line-height:1.4;">Created Tax 2025 folder</div>
+            <div style="font-size:11.5px;color:#A0A0A8;margin-top:1px;">2:14 PM</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="height:1px;background:#F0F0F2;margin:6px 16px;"></div>
+
+      <!-- Files Accessed -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;">
+        <span style="font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:#A0A0A8;">Files Accessed</span>
+        <span style="font-size:11px;font-weight:600;color:#B4B4BA;background:#F0F0F2;border-radius:5px;padding:1px 6px;">5</span>
+      </div>
+      <div style="padding:0 8px 6px;">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;transition:background .12s;" style-hover="background:#0000000a;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F97316" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6.5 3.5h7l4 4v12.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5z"/><path d="M13.5 3.5V8h4"/></svg>
+          <span style="font-size:12.5px;color:#52525B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">tax_return_2024.pdf</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;transition:background .12s;" style-hover="background:#0000000a;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F97316" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6.5 3.5h7l4 4v12.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5z"/><path d="M13.5 3.5V8h4"/></svg>
+          <span style="font-size:12.5px;color:#52525B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">W2_form.pdf</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;transition:background .12s;" style-hover="background:#0000000a;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6.5 3.5h7l4 4v12.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5z"/><path d="M13.5 3.5V8h4"/><path d="M8 12.5h7M8 15.5h7M11.5 12.5v5"/></svg>
+          <span style="font-size:12.5px;color:#52525B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">receipts_2024.xlsx</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;transition:background .12s;" style-hover="background:#0000000a;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F97316" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6.5 3.5h7l4 4v12.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5z"/><path d="M13.5 3.5V8h4"/></svg>
+          <span style="font-size:12.5px;color:#52525B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">invoice.pdf</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;transition:background .12s;" style-hover="background:#0000000a;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><rect x="4" y="5" width="16" height="14" rx="2.2"/><circle cx="9" cy="10" r="1.4"/><path d="M5 16.5l3.5-3 3 2.2 3-2.7 4.5 3.5"/></svg>
+          <span style="font-size:12.5px;color:#52525B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">screenshot.png</span>
+        </div>
+      </div>
+
+      <div style="height:1px;background:#F0F0F2;margin:6px 16px;"></div>
+
+      <!-- File History -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;">
+        <span style="font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:#A0A0A8;">File History</span>
+      </div>
+      <div style="padding:0 4px 16px;">
+        <sc-for list="{{ history }}" as="h" hint-placeholder-count="4">
+          <div style="display:flex;gap:10px;padding:9px 12px;align-items:flex-start;border-radius:8px;transition:background .12s;" style-hover="background:#0000000a;">
+            <span style="width:7px;height:7px;border-radius:50%;background:{{ h.dot }};margin-top:5px;flex:none;"></span>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12.5px;font-weight:500;color:{{ h.verbColor }};line-height:1.4;">{{ h.verb }}</div>
+              <div style="font-size:12px;color:{{ h.targetColor }};line-height:1.4;margin-top:1px;word-break:break-word;text-decoration:{{ h.strike }};">{{ h.target }}</div>
+              <div style="display:flex;align-items:center;gap:9px;margin-top:4px;">
+                <span style="font-size:11px;color:#B4B4BA;">{{ h.time }}</span>
+                <sc-if value="{{ h.notUndone }}" hint-placeholder-val="{{ true }}">
+                  <button onClick="{{ h.undo }}" style="font-size:11px;font-weight:500;color:{{ acc }};background:none;border:none;cursor:pointer;padding:0;display:inline-flex;align-items:center;gap:3px;" style-hover="text-decoration:underline;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a8 8 0 1 1-1 6"/><path d="M4 4v4h4"/></svg>
+                    Undo
+                  </button>
+                </sc-if>
+                <sc-if value="{{ h.undone }}" hint-placeholder-val="{{ false }}">
+                  <span style="font-size:11px;color:#B4B4BA;display:inline-flex;align-items:center;gap:3px;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a8 8 0 1 1-1 6"/><path d="M4 4v4h4"/></svg>
+                    Reverted
+                  </span>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1512,&quot;height&quot;:972},&quot;accentColor&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;#2563EB&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;#2563EB&quot;,&quot;#0F172A&quot;,&quot;#4F46E5&quot;,&quot;#0D9488&quot;,&quot;#475569&quot;]},&quot;assistantName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Sift&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;statusLabel&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Running locally&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  msgRef = React.createRef();
+  fitRef = React.createRef();
+
+  fit() {
+    const el = this.fitRef.current;
+    if (!el) return;
+    const s = Math.min((window.innerWidth - 40) / 1440, (window.innerHeight - 40) / 900, 1);
+    el.style.transform = 'scale(' + s + ')';
+  }
+  componentDidMount() {
+    this._fit = () => this.fit();
+    this.fit();
+    window.addEventListener('resize', this._fit);
+  }
+  componentWillUnmount() {
+    if (this._fit) window.removeEventListener('resize', this._fit);
+  }
+
+  state = {
+    active: 'chat',
+    input: '',
+    typing: false,
+    open: { documents: true, tax: true, work: false, downloads: true, pictures: false, desktop: false },
+    messages: [
+      { id: 1, role: 'user', text: "My Downloads folder is a complete mess — 40-something files just dumped in there. Can you help me sort it out?" },
+      { id: 2, role: 'ai', time: '2:12 PM',
+        text: "I scanned your Downloads folder and found 47 files. A few of the larger or older ones stood out:",
+        chips: [
+          { name: 'invoice.pdf', color: '#F97316' },
+          { name: 'screenshot.png', color: '#8B5CF6' },
+          { name: 'archive.zip', color: '#9CA3AF' }
+        ],
+        text2: "I can group everything by type and tidy it into folders. Want me to start with your documents and tax files?" },
+      { id: 3, role: 'user', text: "Yes please — and put all my tax stuff together in one place." },
+      { id: 4, role: 'ai', time: '2:14 PM',
+        text: "Done. I created a Tax 2025 folder inside Documents and moved 3 files into it:",
+        chips: [
+          { name: 'tax_return_2024.pdf', color: '#F97316' },
+          { name: 'W2_form.pdf', color: '#F97316' },
+          { name: 'receipts_2024.xlsx', color: '#22C55E' }
+        ],
+        text2: "Nothing was deleted, and every change is reversible from the History panel on the right." }
+    ],
+    history: [
+      { id: 'h1', dot: '#16A34A', verb: 'Created folder', target: 'Tax 2025', time: '2:14 PM', undone: false },
+      { id: 'h2', dot: '#2563EB', verb: 'Moved', target: 'tax_return_2024.pdf → Tax 2025', time: '2:14 PM', undone: false },
+      { id: 'h3', dot: '#2563EB', verb: 'Moved', target: 'W2_form.pdf → Tax 2025', time: '2:14 PM', undone: false },
+      { id: 'h4', dot: '#A1A1AA', verb: 'Renamed', target: 'receipts.xlsx → receipts_2024.xlsx', time: '2:13 PM', undone: false },
+      { id: 'h5', dot: '#EF4444', verb: 'Deleted', target: 'duplicate (1).png', time: '2:11 PM', undone: false }
+    ]
+  };
+
+  setActive(k) { this.setState({ active: k }); }
+  toggle(k) { this.setState(s => ({ open: { ...s.open, [k]: !s.open[k] } })); }
+  undoItem(id) { this.setState(s => ({ history: s.history.map(h => h.id === id ? { ...h, undone: true } : h) })); }
+
+  now() {
+    const d = new Date();
+    let h = d.getHours();
+    const m = String(d.getMinutes()).padStart(2, '0');
+    const ap = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return h + ':' + m + ' ' + ap;
+  }
+
+  sendText(t) {
+    const text = (t || '').trim();
+    if (!text) return;
+    const id = Date.now();
+    this.setState(s => ({ input: '', typing: true, messages: [...s.messages, { id, role: 'user', text }] }));
+    setTimeout(() => {
+      this.setState(s => ({ typing: false, messages: [...s.messages, {
+        id: id + 1, role: 'ai', time: this.now(),
+        text: "On it — I'll take a look and propose a tidy structure. You'll see every change here in the History panel, and you can undo anything before it's final.",
+        chips: []
+      }] }));
+    }, 1150);
+  }
+  send() { this.sendText(this.state.input); }
+
+  componentDidUpdate() {
+    const el = this.msgRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }
+
+  renderVals() {
+    const s = this.state;
+    const acc = this.props.accentColor || '#2563EB';
+    const name = this.props.assistantName || 'Sift';
+    const status = this.props.statusLabel || 'Running locally';
+    const navColor = k => s.active === k ? acc : '#71717A';
+    const navBg = k => s.active === k ? acc + '14' : 'transparent';
+
+    const out = {
+      acc, name, status, accSoft: acc + '16',
+      homeColor: navColor('home'), homeBg: navBg('home'), goHome: () => this.setActive('home'),
+      filesColor: navColor('files'), filesBg: navBg('files'), goFiles: () => this.setActive('files'),
+      chatColor: navColor('chat'), chatBg: navBg('chat'), goChat: () => this.setActive('chat'),
+      setColor: navColor('settings'), setBg: navBg('settings'), goSettings: () => this.setActive('settings'),
+      helpColor: navColor('help'), helpBg: navBg('help'), goHelp: () => this.setActive('help'),
+
+      input: s.input,
+      onInput: e => this.setState({ input: e.target.value }),
+      onKey: e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.send(); } },
+      send: () => this.send(),
+      sendBg: s.input.trim() ? acc : '#E4E4E7',
+      sendColor: s.input.trim() ? '#fff' : '#A1A1AA',
+      newChat: () => this.setState({ messages: [] }),
+      suggestClean: () => this.sendText('Clean up my Downloads folder'),
+      suggestTax: () => this.sendText('Find all my tax documents'),
+      suggestPhotos: () => this.sendText('Organize my photos by date'),
+      msgRef: this.msgRef,
+      fitRef: this.fitRef,
+
+      typing: s.typing,
+      isEmpty: s.messages.length === 0,
+      hasMsgs: s.messages.length > 0,
+      messages: s.messages.map(m => ({
+        ...m,
+        isUser: m.role === 'user',
+        isAi: m.role === 'ai',
+        chips: m.chips || [],
+        hasChips: !!(m.chips && m.chips.length)
+      })),
+
+      history: s.history.map(h => ({
+        ...h,
+        undo: () => this.undoItem(h.id),
+        notUndone: !h.undone,
+        verbColor: h.undone ? '#B4B4BA' : '#3F3F46',
+        targetColor: h.undone ? '#C4C4CA' : '#71717A',
+        strike: h.undone ? 'line-through' : 'none'
+      }))
+    };
+
+    const caps = { documents: 400, tax: 120, work: 120, downloads: 150, pictures: 90, desktop: 50 };
+    ['documents', 'tax', 'work', 'downloads', 'pictures', 'desktop'].forEach(k => {
+      const cap = k.charAt(0).toUpperCase() + k.slice(1);
+      out['mh' + cap] = s.open[k] ? caps[k] + 'px' : '0px';
+      out['op' + cap] = s.open[k] ? '1' : '0';
+      out['rot' + cap] = s.open[k] ? 'rotate(90deg)' : 'rotate(0deg)';
+      out['to' + cap] = () => this.toggle(k);
+    });
+
+    return out;
+  }
+}
+</script>
+</body>
+</html>
