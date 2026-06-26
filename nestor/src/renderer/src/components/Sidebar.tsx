@@ -11,6 +11,13 @@ interface NavItem {
   label: string
 }
 
+const SHORT_LABELS: Record<string, string> = {
+  home: 'Home',
+  files: 'Dateien',
+  chat: 'Chat',
+  settings: 'Einst.'
+}
+
 const ICONS: NavItem[] = [
   {
     id: 'home',
@@ -56,12 +63,13 @@ const BOTTOM_ICONS: NavItem[] = [
 ]
 
 function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }): React.JSX.Element {
+  const shortLabel = SHORT_LABELS[item.id] ?? item.label
   return (
     <button
       onClick={onClick}
       title={item.label}
-      className="no-select relative flex items-center justify-center rounded-btn btn-press"
-      style={{ width: 36, height: 36 }}
+      className="no-select relative flex flex-col items-center justify-center gap-[3px] rounded-btn btn-press"
+      style={{ width: 48, height: 44 }}
     >
       {active && (
         <motion.div
@@ -77,6 +85,12 @@ function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; 
       >
         {item.icon}
       </span>
+      <span
+        className="relative z-10 text-[9.5px] font-medium leading-none transition-colors duration-150"
+        style={{ color: active ? ACCENT : 'var(--color-text-hint)' }}
+      >
+        {shortLabel}
+      </span>
     </button>
   )
 }
@@ -86,8 +100,8 @@ export default function Sidebar(): React.JSX.Element {
 
   return (
     <div
-      className="flex flex-col items-center border-r border-border py-2.5 gap-1 no-select"
-      style={{ width: 52, minWidth: 52, background: 'var(--color-sidebar)' }}
+      className="flex flex-col items-center border-r border-border py-2 gap-0.5 no-select"
+      style={{ width: 64, minWidth: 64, background: 'var(--color-sidebar)' }}
     >
       {ICONS.map((item) => (
         <NavButton

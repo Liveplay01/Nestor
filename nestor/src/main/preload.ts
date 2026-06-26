@@ -39,11 +39,15 @@ contextBridge.exposeInMainWorld('nestor', {
     openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', { url })
   },
   app: {
-    getVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version')
+    getVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version'),
+    getSpecialFolders: (): Promise<{ desktop: string; downloads: string; documents: string }> =>
+      ipcRenderer.invoke('app:get-special-folders')
   },
   ollama: {
     check: () => ipcRenderer.invoke('ollama:check'),
     models: () => ipcRenderer.invoke('ollama:models'),
+    testApi: (apiKey: string, baseUrl: string): Promise<{ ok: boolean; message: string }> =>
+      ipcRenderer.invoke('ollama:test-api', { apiKey, baseUrl }),
     chat: (messages: OllamaChatMessage[], systemPrompt: string, model?: string) =>
       ipcRenderer.invoke('ollama:chat', { messages, systemPrompt, model }),
     onStart: (cb: () => void) => {

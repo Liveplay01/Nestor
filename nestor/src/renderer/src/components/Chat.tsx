@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '../store/useStore'
 import { getFileColor } from '../lib/fileColors'
-import { SYSTEM_PROMPT } from '../lib/systemPrompt'
+import { buildSystemPrompt } from '../lib/systemPrompt'
 import { randomId, formatTime } from '../lib/utils'
 import type { Message, HistoryItem, FileEntry } from '@shared/types'
 import NestorLogo from './NestorLogo'
@@ -16,6 +16,39 @@ type ContextFile = { name: string; path: string; color: string }
 const STATUS_COLORS: Record<AiStatus, string> = { green: '#16A34A', yellow: '#CA8A04', red: '#DC2626' }
 const STATUS_GLOW: Record<AiStatus, string> = { green: '#16A34A24', yellow: '#CA8A0424', red: '#DC262624' }
 const STATUS_LABELS: Record<AiStatus, string> = { green: 'Läuft lokal', yellow: 'Online API', red: 'Nicht verbunden' }
+const STATUS_TOOLTIPS: Record<AiStatus, string> = {
+  green: 'Nestor läuft lokal auf deinem PC – deine Dateien verlassen dieses Gerät nicht.',
+  yellow: 'Nestor verwendet eine externe KI (API) – Texte werden zur Verarbeitung an den Anbieter gesendet.',
+  red: 'Nestor ist nicht verbunden. Überprüfe deine KI-Einstellungen (⚙).'
+}
+
+function friendlyError(err: string): string {
+  if (err.includes('ECONNREFUSED') || err.includes('11434'))
+    return '⚠️ Nestor ist nicht erreichbar. Öffne die Taskleiste und starte Ollama neu – oder überprüfe deine Einstellungen (⚙).'
+  if (err.includes('401') || err.toLowerCase().includes('unauthorized') || err.toLowerCase().includes('api key'))
+    return '⚠️ Dein API-Schlüssel ist ungültig oder abgelaufen. Bitte überprüfe ihn in den Einstellungen (⚙).'
+  if (err.includes('429') || err.toLowerCase().includes('rate limit'))
+    return '⚠️ Zu viele Anfragen in kurzer Zeit. Bitte warte einen Moment und versuche es erneut.'
+  if (err.toLowerCase().includes('timeout') || err.includes('ETIMEDOUT'))
+    return '⚠️ Nestor hat nicht rechtzeitig geantwortet. Ist deine Internetverbindung aktiv?'
+  if (err.includes('ENETUNREACH') || err.includes('ENOTFOUND'))
+    return '⚠️ Keine Verbindung zum Internet. Bitte überprüfe deine Netzwerkverbindung.'
+  if (err.includes('403') || err.toLowerCase().includes('forbidden'))
+    return '⚠️ Zugriff verweigert. Bitte überprüfe deine API-Einstellungen (⚙).'
+  return '⚠️ Etwas ist schiefgelaufen. Bitte versuche es erneut oder starte Nestor neu.'
+}
+
+const WELCOME_KEY = 'nestor_welcomed_v1'
+const WELCOME_MESSAGE = `Hallo! Ich bin Nestor, dein persönlicher Assistent für die Dateiverwaltung. 👋
+
+Ich kann dir helfen:
+• Ordner zu sortieren und aufzuräumen
+• Dateien zu finden und umzubenennen
+• Deinen Desktop oder Downloads zu organisieren
+
+Schreib mir einfach, was du brauchst – zum Beispiel: „Mein Desktop ist ein Chaos, kannst du helfen?"
+
+Du kannst auch Dateien aus dem Dateibaum links in dieses Fenster ziehen, um sie mit mir zu besprechen.`
 
 // ─── Workflow Cards (Empty State) ──────────────────────────────────────────
 
@@ -253,6 +286,40 @@ export default function Chat(): React.JSX.Element {
 
   const allFiles = flattenTree(fileTree)
 
+  // On mount: restore saved messages, then show welcome if first launch
+  useEffect(() => {
+    const CHAT_KEY = 'nestor_chat_v1'
+    let savedMsgs: Message[] = []
+    try {
+      const raw = localStorage.getItem(CHAT_KEY)
+      if (raw) savedMsgs = (JSON.parse(raw) as Message[]).filter((m) => !m.isStreaming && m.text)
+    } catch {}
+    savedMsgs.forEach((m) => addMessage(m))
+
+    if (savedMsgs.length === 0 && !localStorage.getItem(WELCOME_KEY)) {
+      addMessage({ id: randomId(), role: 'ai', text: WELCOME_MESSAGE, time: formatTime(new Date()), isStreaming: false })
+      localStorage.setItem(WELCOME_KEY, '1')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Persist messages to localStorage whenever they change
+  useEffect(() => {
+    const completed = messages.filter((m) => !m.isStreaming && m.text)
+    if (completed.length === 0) return
+    try { localStorage.setItem('nestor_chat_v1', JSON.stringify(completed.slice(-100))) } catch {}
+  }, [messages])
+
+  // Pick up prefill prompt from HomePage quick actions
+  useEffect(() => {
+    const prefill = sessionStorage.getItem('nestor_prefill_prompt')
+    if (prefill) {
+      sessionStorage.removeItem('nestor_prefill_prompt')
+      setInput(prefill)
+      setTimeout(() => inputRef.current?.focus(), 100)
+    }
+  }, [])
+
   // AI status check
   useEffect(() => {
     const check = async () => {
@@ -313,7 +380,7 @@ export default function Chat(): React.JSX.Element {
     })
     const unError = window.nestor.ollama.onError((err) => {
       const sid = currentStreamId.val
-      if (sid) useStore.setState((s) => ({ messages: s.messages.map((m) => m.id === sid ? { ...m, text: `Fehler: ${err}`, isStreaming: false } : m) }))
+      if (sid) useStore.setState((s) => ({ messages: s.messages.map((m) => m.id === sid ? { ...m, text: friendlyError(err), isStreaming: false } : m) }))
       setTyping(false); setStreamingId(null); currentStreamId.val = ''
     })
     ;(window as { __nestorSetStreamId?: (id: string) => void }).__nestorSetStreamId = (id) => { currentStreamId.val = id }
@@ -356,8 +423,10 @@ export default function Chat(): React.JSX.Element {
       .filter((m) => !m.isStreaming && m.text)
       .map((m) => ({ role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant', content: m.text }))
 
-    await window.nestor.ollama.chat([...history, { role: 'user' as const, content: messageContent }], SYSTEM_PROMPT, settings?.model)
-  }, [isTyping, chatStartTime, addMessage, setTyping, setChatStartTime, setChatTitle, settings?.model, setFilesInContext, contextFiles])
+    const topLevelNames = fileTree.flatMap((e) => [e.name])
+    const systemPrompt = buildSystemPrompt(settings?.rootFolder ?? undefined, topLevelNames)
+    await window.nestor.ollama.chat([...history, { role: 'user' as const, content: messageContent }], systemPrompt, settings?.model)
+  }, [isTyping, chatStartTime, addMessage, setTyping, setChatStartTime, setChatTitle, settings?.model, setFilesInContext, contextFiles, fileTree, settings?.rootFolder])
 
   const handleAnchor = useCallback((msg: Message) => {
     addAnchor({ id: randomId(), text: msg.text.slice(0, 60) + (msg.text.length > 60 ? '…' : ''), time: msg.time ?? formatTime(new Date()), messageId: msg.id })
@@ -390,6 +459,21 @@ export default function Chat(): React.JSX.Element {
   const handleDragLeave = () => setIsDragOver(false)
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setIsDragOver(false)
+
+    // Native file drop from Windows Explorer
+    if (e.dataTransfer.files.length > 0) {
+      for (const nativeFile of Array.from(e.dataTransfer.files)) {
+        const path = (nativeFile as File & { path?: string }).path
+        if (path) {
+          const name = path.split(/[/\\]/).pop() ?? nativeFile.name
+          const color = getFileColor(name)
+          if (!contextFiles.some((f) => f.path === path)) setContextFiles((prev) => [...prev, { name, path, color }])
+          addAccessedFile({ name, path, color, accessedAt: Date.now() })
+        }
+      }
+      return
+    }
+
     const data = e.dataTransfer.getData('nestor/file')
     if (!data) return
     try {
@@ -452,14 +536,38 @@ export default function Chat(): React.JSX.Element {
 
         <div className="flex items-center gap-2 flex-none">
           {/* AI Status */}
-          <div className="flex items-center gap-[7px] h-[29px] px-[11px] border border-border-strong rounded-full" style={{ background: 'var(--color-bg)' }}>
+          <div
+            title={STATUS_TOOLTIPS[aiStatus]}
+            className="flex items-center gap-[7px] h-[29px] px-[11px] border border-border-strong rounded-full cursor-help"
+            style={{ background: 'var(--color-bg)' }}
+          >
             <span className="w-1.5 h-1.5 rounded-full flex-none transition-colors duration-500" style={{ background: STATUS_COLORS[aiStatus], boxShadow: `0 0 0 3px ${STATUS_GLOW[aiStatus]}` }} />
             <span className="text-[12px] font-medium text-text-muted whitespace-nowrap">{STATUS_LABELS[aiStatus]}</span>
           </div>
 
+          {/* Proactive analysis */}
+          {settings?.rootFolder && fileTree.length > 0 && (
+            <button
+              onClick={() => {
+                const names = fileTree.map((e) => e.name).slice(0, 30).join(', ')
+                sendMessage(`Analysiere bitte meinen Ordner und erkläre mir kurz, was du siehst. Gib mir dann 3 konkrete Vorschläge, wie ich ihn besser organisieren könnte. Inhalt: ${names}`, [])
+              }}
+              disabled={isTyping}
+              title="Ordner automatisch analysieren"
+              className="btn-press flex items-center gap-1.5 h-[29px] px-3 border border-border-strong rounded-md text-[12.5px] font-medium transition-colors duration-150 hover:bg-surface disabled:opacity-40"
+              style={{ background: 'var(--color-bg)', color: '#2563EB', borderColor: '#C7D6F8' }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
+                <path d="M11 8v3M11 14h.01" />
+              </svg>
+              Analysieren
+            </button>
+          )}
+
           {/* New Chat */}
           <button
-            onClick={clearMessages}
+            onClick={() => { clearMessages(); localStorage.removeItem('nestor_chat_v1') }}
             className="btn-press flex items-center gap-1.5 h-[29px] px-3 border border-border-strong rounded-md text-text-muted text-[12.5px] font-medium transition-colors duration-150 hover:bg-surface"
             style={{ background: 'var(--color-bg)' }}
           >
@@ -629,8 +737,9 @@ export default function Chat(): React.JSX.Element {
             </div>
           </div>
 
-          <div className="text-center text-[11.5px] text-text-hint mt-2.5">
-            Deine Daten verlassen dieses Gerät nicht · Ziehe Dateien in den Chat für Kontext
+          <div className="text-center text-[11.5px] text-text-hint mt-2.5 select-none">
+            <span className="font-mono border border-border rounded px-1 py-0.5 text-[10.5px]" style={{ background: 'var(--color-surface)' }}>Enter</span>
+            {' '}senden · <span className="font-mono">@</span> für Dateien · Deine Daten verlassen dieses Gerät nicht
           </div>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useStore } from '../store/useStore'
 import { getFileColor } from '../lib/fileColors'
+import { ConfirmDialog, PromptDialog } from './Dialog'
 import type { FileEntry } from '@shared/types'
 
 // ─── Context Menu ──────────────────────────────────────────────────────────
@@ -190,6 +191,11 @@ export default function Explorer(): React.JSX.Element {
   const { settings, addHistoryItem } = useStore()
   const rootFolder = settings?.rootFolder ?? ''
 
+  type DialogState =
+    | { type: 'confirm'; message: string; danger?: boolean; pending: () => Promise<void> }
+    | { type: 'prompt'; label: string; pending: (value: string) => Promise<void> }
+    | null
+
   const [entries, setEntries] = useState<FileEntry[]>([])
   const [currentPath, setCurrentPath] = useState(rootFolder)
   const [breadcrumb, setBreadcrumb] = useState<{ name: string; path: string }[]>([])
@@ -199,6 +205,7 @@ export default function Explorer(): React.JSX.Element {
   const [renameValue, setRenameValue] = useState('')
   const [clipboard, setClipboard] = useState<{ entry: FileEntry; cut: boolean } | null>(null)
   const [loading, setLoading] = useState(false)
+  const [dialog, setDialog] = useState<DialogState>(null)
 
   const loadEntries = useCallback(async (path: string) => {
     if (!path) return
@@ -245,29 +252,43 @@ export default function Explorer(): React.JSX.Element {
     if (action === 'cut') { setClipboard({ entry, cut: true }); return }
     if (action === 'rename') { setRenaming(entry.path); setRenameValue(entry.name); return }
     if (action === 'delete') {
-      if (!window.confirm(`"${entry.name}" wirklich löschen?`)) return
-      const item = await window.nestor.fs.deleteFile(entry.path)
-      if (item) addHistoryItem(item)
-      loadEntries(currentPath)
+      setDialog({
+        type: 'confirm',
+        message: `"${entry.name}" wirklich in den Papierkorb verschieben?`,
+        danger: true,
+        pending: async () => {
+          const item = await window.nestor.fs.deleteFile(entry.path)
+          if (item) addHistoryItem(item)
+          loadEntries(currentPath)
+        }
+      })
       return
     }
     if (action === 'new-folder') {
-      const name = window.prompt('Ordnername:')
-      if (!name) return
-      const sep = currentPath.includes('/') ? '/' : '\\'
-      const newPath = entry.isFolder ? `${entry.path}${sep}${name}` : `${currentPath}${sep}${name}`
-      const item = await window.nestor.fs.createFolder(newPath)
-      if (item) addHistoryItem(item)
-      loadEntries(currentPath)
+      setDialog({
+        type: 'prompt',
+        label: 'Ordnername:',
+        pending: async (name) => {
+          const sep = currentPath.includes('/') ? '/' : '\\'
+          const newPath = entry.isFolder ? `${entry.path}${sep}${name}` : `${currentPath}${sep}${name}`
+          const item = await window.nestor.fs.createFolder(newPath)
+          if (item) addHistoryItem(item)
+          loadEntries(currentPath)
+        }
+      })
       return
     }
     if (action === 'new-file') {
-      const name = window.prompt('Dateiname:')
-      if (!name) return
-      const sep = currentPath.includes('/') ? '/' : '\\'
-      const newPath = entry.isFolder ? `${entry.path}${sep}${name}` : `${currentPath}${sep}${name}`
-      await window.nestor.fs.createFile(newPath)
-      loadEntries(currentPath)
+      setDialog({
+        type: 'prompt',
+        label: 'Dateiname:',
+        pending: async (name) => {
+          const sep = currentPath.includes('/') ? '/' : '\\'
+          const newPath = entry.isFolder ? `${entry.path}${sep}${name}` : `${currentPath}${sep}${name}`
+          await window.nestor.fs.createFile(newPath)
+          loadEntries(currentPath)
+        }
+      })
       return
     }
   }
@@ -433,6 +454,24 @@ export default function Explorer(): React.JSX.Element {
           menu={ctxMenu}
           onClose={() => setCtxMenu(null)}
           onAction={handleContextAction}
+        />
+      )}
+
+      {/* Dialogs */}
+      {dialog?.type === 'confirm' && (
+        <ConfirmDialog
+          message={dialog.message}
+          danger={dialog.danger}
+          confirmLabel={dialog.danger ? 'In Papierkorb' : 'Bestätigen'}
+          onConfirm={async () => { setDialog(null); await dialog.pending() }}
+          onCancel={() => setDialog(null)}
+        />
+      )}
+      {dialog?.type === 'prompt' && (
+        <PromptDialog
+          label={dialog.label}
+          onConfirm={async (value) => { setDialog(null); await dialog.pending(value) }}
+          onCancel={() => setDialog(null)}
         />
       )}
     </div>

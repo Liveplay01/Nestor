@@ -1,5 +1,6 @@
 import * as fs from 'fs'
 import * as path from 'path'
+import { shell } from 'electron'
 import { FileEntry, FileType, HistoryItem } from '../shared/types'
 import { randomUUID } from 'crypto'
 
@@ -118,16 +119,8 @@ export function renameFile(filePath: string, newName: string): HistoryItem {
   }
 }
 
-export function deleteFile(filePath: string): HistoryItem {
-  let snapshotBase64: string | undefined
-  const stat = fs.statSync(filePath)
-  if (stat.isFile()) {
-    const buf = fs.readFileSync(filePath)
-    snapshotBase64 = buf.toString('base64')
-    fs.unlinkSync(filePath)
-  } else {
-    fs.rmdirSync(filePath, { recursive: true } as Parameters<typeof fs.rmdirSync>[1])
-  }
+export async function deleteFile(filePath: string): Promise<HistoryItem> {
+  await shell.trashItem(filePath)
   return {
     id: randomUUID(),
     type: 'delete_file',
@@ -136,8 +129,7 @@ export function deleteFile(filePath: string): HistoryItem {
     time: formatTime(new Date()),
     timestamp: Date.now(),
     undone: false,
-    path: filePath,
-    snapshotBase64
+    path: filePath
   }
 }
 
@@ -162,28 +154,28 @@ export function undoAction(item: HistoryItem): void {
   }
 }
 
-export function searchFiles(rootPath: string, query: string): FileEntry[] {
+export async function searchFiles(rootPath: string, query: string): Promise<FileEntry[]> {
   const results: FileEntry[] = []
   const q = query.toLowerCase()
 
-  function walk(dir: string, depth: number): void {
+  async function walk(dir: string, depth: number): Promise<void> {
     if (depth > 3) return
     let items: string[]
     try {
-      items = fs.readdirSync(dir)
+      items = await fs.promises.readdir(dir)
     } catch {
       return
     }
     for (const name of items) {
       if (name.startsWith('.')) continue
+      const fullPath = path.join(dir, name)
+      let stat: fs.Stats
+      try {
+        stat = await fs.promises.stat(fullPath)
+      } catch {
+        continue
+      }
       if (name.toLowerCase().includes(q)) {
-        const fullPath = path.join(dir, name)
-        let stat: fs.Stats
-        try {
-          stat = fs.statSync(fullPath)
-        } catch {
-          continue
-        }
         results.push({
           name,
           path: fullPath,
@@ -191,16 +183,11 @@ export function searchFiles(rootPath: string, query: string): FileEntry[] {
           isFolder: stat.isDirectory()
         })
       }
-      const fullPath = path.join(dir, name)
-      try {
-        if (fs.statSync(fullPath).isDirectory()) walk(fullPath, depth + 1)
-      } catch {
-        // skip
-      }
+      if (stat.isDirectory()) await walk(fullPath, depth + 1)
     }
   }
 
-  walk(rootPath, 0)
+  await walk(rootPath, 0)
   return results.slice(0, 50)
 }
 

@@ -3,15 +3,16 @@ import { useStore } from '../store/useStore'
 import NestorLogo from './NestorLogo'
 
 export default function TitleBar(): React.JSX.Element {
-  const settings = useStore((s) => s.settings)
+  const { settings, setActiveNav } = useStore()
 
   const minimize = () => window.nestor.window.minimize()
   const maximize = () => window.nestor.window.maximize()
   const close = () => window.nestor.window.close()
 
+  const hasFolder = Boolean(settings?.rootFolder)
   const folderName = settings?.rootFolder
     ? settings.rootFolder.split(/[/\\]/).pop()
-    : 'Kein Ordner gewählt'
+    : null
 
   return (
     <div
@@ -22,8 +23,20 @@ export default function TitleBar(): React.JSX.Element {
       <div className="flex items-center gap-2.5 no-drag">
         <NestorLogo size={24} />
         <span className="text-[13.5px] font-semibold text-text-primary tracking-tight">Nestor</span>
-        <span className="text-[12.5px] text-text-hint">/</span>
-        <span className="text-[12.5px] text-text-faint">{folderName}</span>
+        {hasFolder ? (
+          <>
+            <span className="text-[12.5px] text-text-hint">/</span>
+            <span className="text-[12.5px] text-text-faint">{folderName}</span>
+          </>
+        ) : (
+          <button
+            onClick={() => setActiveNav('settings')}
+            className="no-drag text-[12px] font-medium px-2.5 py-1 rounded-md transition-colors hover:bg-black/[0.05]"
+            style={{ color: '#2563EB' }}
+          >
+            Ordner auswählen um zu beginnen →
+          </button>
+        )}
       </div>
 
       {/* Right: window controls */}

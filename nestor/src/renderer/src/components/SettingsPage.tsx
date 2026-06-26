@@ -56,6 +56,8 @@ export default function SettingsPage(): React.JSX.Element {
   const { settings, patchSettings } = useStore()
   const [version, setVersion] = useState('')
   const [ollamaStatus, setOllamaStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle')
+  const [apiStatus, setApiStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle')
+  const [apiStatusMsg, setApiStatusMsg] = useState('')
   const [models, setModels] = useState<string[]>([])
 
   useEffect(() => {
@@ -80,6 +82,20 @@ export default function SettingsPage(): React.JSX.Element {
       setOllamaStatus(s.running && s.hasModel ? 'ok' : 'error')
     } catch {
       setOllamaStatus('error')
+    }
+  }
+
+  const checkApi = async () => {
+    if (!settings?.apiKey || !settings?.apiBaseUrl) return
+    setApiStatus('checking')
+    setApiStatusMsg('')
+    try {
+      const result = await window.nestor.ollama.testApi(settings.apiKey, settings.apiBaseUrl)
+      setApiStatus(result.ok ? 'ok' : 'error')
+      setApiStatusMsg(result.message)
+    } catch {
+      setApiStatus('error')
+      setApiStatusMsg('Keine Verbindung möglich.')
     }
   }
 
@@ -161,7 +177,7 @@ export default function SettingsPage(): React.JSX.Element {
                 <input
                   type="password"
                   value={settings.apiKey ?? ''}
-                  onChange={(e) => save({ apiKey: e.target.value })}
+                  onChange={(e) => { save({ apiKey: e.target.value }); setApiStatus('idle') }}
                   placeholder="sk-..."
                   className="h-8 px-3 rounded-lg border border-border-strong text-[12.5px] text-text-primary outline-none w-56"
                   style={{ background: 'var(--color-bg)' }}
@@ -171,7 +187,7 @@ export default function SettingsPage(): React.JSX.Element {
                 <input
                   type="text"
                   value={settings.apiBaseUrl ?? ''}
-                  onChange={(e) => save({ apiBaseUrl: e.target.value })}
+                  onChange={(e) => { save({ apiBaseUrl: e.target.value }); setApiStatus('idle') }}
                   placeholder="https://api.openai.com/v1"
                   className="h-8 px-3 rounded-lg border border-border-strong text-[12.5px] text-text-primary outline-none w-56"
                   style={{ background: 'var(--color-bg)' }}
@@ -186,6 +202,23 @@ export default function SettingsPage(): React.JSX.Element {
                   className="h-8 px-3 rounded-lg border border-border-strong text-[12.5px] text-text-primary outline-none w-40"
                   style={{ background: 'var(--color-bg)' }}
                 />
+              </Row>
+              <Row label="Verbindung testen" hint={apiStatusMsg || 'Prüft ob API-Key und URL korrekt sind'}>
+                <button
+                  onClick={checkApi}
+                  disabled={!settings.apiKey || !settings.apiBaseUrl || apiStatus === 'checking'}
+                  className="h-8 px-4 rounded-lg border border-border-strong text-[12.5px] font-medium transition-colors disabled:opacity-40"
+                  style={{ background: 'var(--color-bg)', color: apiStatus === 'ok' ? '#16A34A' : apiStatus === 'error' ? '#DC2626' : 'var(--color-text-muted)' }}
+                >
+                  {apiStatus === 'checking' ? (
+                    <span className="flex items-center gap-1.5">
+                      <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4" />
+                      </svg>
+                      Prüfe…
+                    </span>
+                  ) : apiStatus === 'ok' ? '✓ Verbunden' : apiStatus === 'error' ? '✗ Fehler' : 'Testen'}
+                </button>
               </Row>
             </>
           )}
@@ -265,28 +298,23 @@ export default function SettingsPage(): React.JSX.Element {
           </Row>
         </Section>
 
+        {/* Help */}
+        <Section title="Hilfe">
+          <Row label="App-Tour" hint="Zeigt dir noch einmal alle Bereiche der App">
+            <button
+              onClick={() => window.dispatchEvent(new Event('nestor:start-tour'))}
+              className="h-8 px-4 rounded-lg border border-border-strong text-[12.5px] font-medium text-text-muted transition-colors hover:bg-surface"
+              style={{ background: 'var(--color-bg)' }}
+            >
+              Tour starten
+            </button>
+          </Row>
+        </Section>
+
         {/* About */}
         <Section title="Über Nestor">
           <Row label="Version" hint="Nestor Desktop">
             <span className="text-[12.5px] text-text-faint">{version || '—'}</span>
-          </Row>
-          <Row label="PC Manager" hint="Microsofts System-Optimierungs-Tool">
-            <button
-              onClick={() => window.nestor.shell.openExternal('https://pcmanager.microsoft.com/en-us')}
-              className="h-8 px-3 rounded-lg border border-border-strong text-[12.5px] text-text-muted transition-colors hover:bg-surface"
-              style={{ background: 'var(--color-bg)' }}
-            >
-              Öffnen ↗
-            </button>
-          </Row>
-          <Row label="UniGetUI" hint="Grafisches Frontend für Windows-Paketmanager">
-            <button
-              onClick={() => window.nestor.shell.openExternal('https://www.marticliment.com/unigetui/')}
-              className="h-8 px-3 rounded-lg border border-border-strong text-[12.5px] text-text-muted transition-colors hover:bg-surface"
-              style={{ background: 'var(--color-bg)' }}
-            >
-              Öffnen ↗
-            </button>
           </Row>
         </Section>
 

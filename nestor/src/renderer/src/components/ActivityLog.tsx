@@ -38,11 +38,20 @@ export default function ActivityLog(): React.JSX.Element {
       className="flex flex-col border-l border-border overflow-y-auto"
       style={{ width: 260, minWidth: 260, background: 'var(--color-surface)' }}
     >
-      {/* ── Anchor Points ─────────────────────────────── */}
+      {/* ── Saved Answers ─────────────────────────────── */}
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-text-ghost">
-          Ankerpunkte
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-text-ghost">
+            Gespeicherte Antworten
+          </span>
+          <span
+            title="Fahre mit der Maus über eine Nestor-Antwort und klicke das Lesezeichen-Symbol 🔖, um sie hier zu speichern."
+            className="text-text-hint cursor-help select-none"
+            style={{ fontSize: 12, lineHeight: 1 }}
+          >
+            ⓘ
+          </span>
+        </div>
         {anchors.length > 0 && (
           <span className="text-[11px] font-semibold text-text-hint bg-[#F0F0F2] rounded-[5px] px-1.5 py-px">
             {anchors.length}
@@ -52,8 +61,10 @@ export default function ActivityLog(): React.JSX.Element {
 
       <div className="px-2 pb-1.5">
         {anchors.length === 0 ? (
-          <div className="text-[12px] text-text-hint px-2 py-2">
-            Noch keine Ankerpunkte. Hover über eine KI-Nachricht.
+          <div className="text-[12px] text-text-hint px-2 py-2 leading-[1.5]">
+            Noch keine gespeicherten Antworten.
+            <br />
+            <span className="text-[11.5px]">Fahre über eine Nestor-Antwort → Lesezeichen 🔖 klicken.</span>
           </div>
         ) : (
           anchors.map((a) => (
@@ -75,7 +86,7 @@ export default function ActivityLog(): React.JSX.Element {
       {/* ── Files Accessed ────────────────────────────── */}
       <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
         <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-text-ghost">
-          Gelesene Dateien
+          Im Gespräch verwendet
         </span>
         {accessedFiles.length > 0 && (
           <span className="text-[11px] font-semibold text-text-hint bg-[#F0F0F2] rounded-[5px] px-1.5 py-px">
@@ -86,7 +97,7 @@ export default function ActivityLog(): React.JSX.Element {
 
       <div className="px-2 pb-1.5">
         {accessedFiles.length === 0 ? (
-          <div className="text-[12px] text-text-hint px-2 py-2">Noch keine Dateien gelesen.</div>
+          <div className="text-[12px] text-text-hint px-2 py-2">Noch keine Dateien verwendet.</div>
         ) : (
           accessedFiles.map((f) => (
             <div key={f.path} className="flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors duration-100 hover:bg-black/[0.04]">
@@ -140,6 +151,7 @@ export default function ActivityLog(): React.JSX.Element {
                   {!item.undone ? (
                     <button
                       onClick={() => handleUndo(item.id)}
+                      title={`${item.verb}: ${item.target} rückgängig machen`}
                       className="text-[11px] font-medium inline-flex items-center gap-[3px] p-0 border-none bg-transparent cursor-pointer hover:underline"
                       style={{ color: ACCENT }}
                     >

@@ -14,7 +14,7 @@ import {
   undoAction,
   searchFiles
 } from './fs-manager'
-import { checkOllama, streamChat, getAvailableModels } from './ollama'
+import { checkOllama, streamChat, getAvailableModels, testExternalApi } from './ollama'
 import { runOnboarding } from './onboarding'
 import { Settings, HistoryItem } from '../shared/types'
 
@@ -102,8 +102,8 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
     }
   )
 
-  ipcMain.handle('fs:delete-file', (_, { path }: { path: string }) => {
-    const item = deleteFile(path)
+  ipcMain.handle('fs:delete-file', async (_, { path }: { path: string }) => {
+    const item = await deleteFile(path)
     saveHistory(item)
     return item
   })
@@ -127,6 +127,9 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
   // ── Ollama ────────────────────────────────────────────────
   ipcMain.handle('ollama:check', () => checkOllama())
   ipcMain.handle('ollama:models', () => getAvailableModels())
+  ipcMain.handle('ollama:test-api', (_, { apiKey, baseUrl }: { apiKey: string; baseUrl: string }) =>
+    testExternalApi(apiKey, baseUrl)
+  )
 
   ipcMain.handle(
     'ollama:chat',
@@ -144,11 +147,13 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
     ) => {
       const win = getWin()
       if (!win) return
+      const settings = store.get('settings')
       await streamChat(
         win,
         messages as { role: 'user' | 'assistant' | 'system'; content: string }[],
         systemPrompt,
-        model
+        model,
+        settings
       )
     }
   )
@@ -193,6 +198,11 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
 
   // ── App info ──────────────────────────────────────────────
   ipcMain.handle('app:get-version', () => app.getVersion())
+  ipcMain.handle('app:get-special-folders', () => ({
+    desktop: app.getPath('desktop'),
+    downloads: app.getPath('downloads'),
+    documents: app.getPath('documents')
+  }))
 
   // ── Startup: init watcher if folder already set ───────────
   const settings = store.get('settings')

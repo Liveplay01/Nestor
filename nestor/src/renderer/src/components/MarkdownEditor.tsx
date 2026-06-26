@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useStore } from '../store/useStore'
 
 export default function MarkdownEditor(): React.JSX.Element | null {
@@ -7,6 +7,8 @@ export default function MarkdownEditor(): React.JSX.Element | null {
   const [loading, setLoading] = useState(true)
   const [saved, setSaved] = useState(true)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const contentRef = useRef(content)
+  contentRef.current = content
 
   useEffect(() => {
     if (!openMarkdownFile) return
@@ -15,6 +17,43 @@ export default function MarkdownEditor(): React.JSX.Element | null {
       .then((c: string) => { setContent(c); setSaved(true) })
       .catch(() => setContent(''))
       .finally(() => setLoading(false))
+  }, [openMarkdownFile?.path])
+
+  const flushSave = useCallback(async () => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current)
+      saveTimer.current = null
+    }
+    if (openMarkdownFile && !saved) {
+      await window.nestor.fs.writeFile(openMarkdownFile.path, contentRef.current)
+      setSaved(true)
+    }
+  }, [openMarkdownFile, saved])
+
+  // Ctrl+S to save immediately
+  useEffect(() => {
+    const handler = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault()
+        flushSave()
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [flushSave])
+
+  // Flush on unmount (file closed / component removed)
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current)
+        saveTimer.current = null
+      }
+      if (openMarkdownFile && !saved) {
+        window.nestor.fs.writeFile(openMarkdownFile.path, contentRef.current)
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openMarkdownFile?.path])
 
   const handleChange = (value: string) => {

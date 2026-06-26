@@ -100,10 +100,15 @@ export default function Onboarding(): React.JSX.Element {
   const [progress, setProgress] = useState<Progress>({ percent: 0, statusText: 'Vorbereitung…' })
   const [errorMsg, setErrorMsg] = useState('')
   const [chosenFolder, setChosenFolder] = useState('')
+  const [specialFolders, setSpecialFolders] = useState<{ desktop: string; downloads: string; documents: string } | null>(null)
   const [aiMode, setAiMode] = useState<AiMode>(null)
   const [apiKey, setApiKey] = useState('')
   const [apiBaseUrl, setApiBaseUrl] = useState('https://api.openai.com/v1')
   const [apiModel, setApiModel] = useState('gpt-4o-mini')
+
+  useEffect(() => {
+    window.nestor.app.getSpecialFolders().then(setSpecialFolders).catch(() => null)
+  }, [])
 
   useEffect(() => {
     const unStep = window.nestor.onboarding.onStep((s) => {
@@ -320,8 +325,8 @@ export default function Onboarding(): React.JSX.Element {
               </div>
               <div className="text-[13.5px] text-text-faint leading-relaxed mb-7">
                 {step === 'install-ollama'
-                  ? 'Wir installieren Ollama – die Engine, die Nestors KI lokal auf deinem PC betreibt. Keine Daten verlassen dein Gerät.'
-                  : 'Das Sprachmodell (ca. 3,8 GB) wird einmalig heruntergeladen. Danach läuft alles vollständig offline.'}
+                  ? 'Wir installieren Ollama – die Engine, die Nestors KI lokal auf deinem PC betreibt. Deine Dateien verlassen dieses Gerät nicht.'
+                  : 'Das KI-Sprachmodell (ca. 3,8 GB) wird jetzt einmalig heruntergeladen – das kann je nach Verbindung 5–15 Minuten dauern. Danach läuft alles vollständig offline, auch ohne Internet.'}
               </div>
               <ProgressBar percent={progress.percent} />
               <div className="mt-3 text-[12px] text-text-faint">{progress.statusText}</div>
@@ -334,17 +339,54 @@ export default function Onboarding(): React.JSX.Element {
           {step === 'choose-folder' && (
             <div>
               <div className="text-[20px] font-semibold text-text-primary mb-2 tracking-tight">Wähle deinen Hauptordner</div>
-              <div className="text-[13.5px] text-text-faint leading-relaxed mb-6">
-                Nestor braucht einen Ordner, den er beobachten und organisieren darf. Du kannst das später in den Einstellungen ändern.
+              <div className="text-[13.5px] text-text-faint leading-relaxed mb-5">
+                Nestor beobachtet diesen Ordner und hilft dir, ihn zu organisieren. Du kannst das später in den Einstellungen ändern.
               </div>
+
+              {/* Quick picks */}
+              {specialFolders && (
+                <>
+                  <div className="text-[11.5px] font-medium text-text-hint mb-2 uppercase tracking-wider">Schnellauswahl</div>
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    {([
+                      { label: 'Desktop', icon: '🖥️', path: specialFolders.desktop },
+                      { label: 'Downloads', icon: '📥', path: specialFolders.downloads },
+                      { label: 'Dokumente', icon: '📄', path: specialFolders.documents }
+                    ] as const).map(({ label, icon, path }) => (
+                      <button
+                        key={label}
+                        onClick={() => setChosenFolder(path)}
+                        className="rounded-xl border py-3 flex flex-col items-center gap-1.5 transition-all duration-150"
+                        style={{
+                          borderColor: chosenFolder === path ? ACCENT : '#EAEAED',
+                          background: chosenFolder === path ? `${ACCENT}08` : '#FBFBFC',
+                          boxShadow: chosenFolder === path ? `0 0 0 2px ${ACCENT}22` : 'none'
+                        }}
+                      >
+                        <span className="text-[22px] leading-none">{icon}</span>
+                        <span className="text-[12px] font-medium text-text-secondary">{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="flex-1 h-px" style={{ background: '#EAEAED' }} />
+                    <span className="text-[12px] text-text-hint">oder</span>
+                    <div className="flex-1 h-px" style={{ background: '#EAEAED' }} />
+                  </div>
+                </>
+              )}
+
               <button
                 onClick={handleChooseFolder}
-                className="w-full h-11 rounded-lg border border-border-strong bg-white text-[14px] font-medium text-text-secondary transition-all duration-150 hover:bg-surface hover:border-[#D9D9DD] mb-3"
+                className="w-full h-10 rounded-lg border border-border-strong bg-white text-[13.5px] font-medium text-text-secondary transition-all duration-150 hover:bg-surface hover:border-[#D9D9DD] mb-3"
               >
-                {chosenFolder ? '📁 ' + chosenFolder.split(/[/\\]/).pop() : 'Ordner auswählen…'}
+                {chosenFolder && !Object.values(specialFolders ?? {}).includes(chosenFolder)
+                  ? '📁 ' + chosenFolder.split(/[/\\]/).pop()
+                  : 'Anderen Ordner auswählen…'}
               </button>
+
               {chosenFolder && (
-                <div className="text-[12px] text-text-hint mb-4 truncate px-1">{chosenFolder}</div>
+                <div className="text-[11.5px] text-text-hint mb-4 truncate px-1">{chosenFolder}</div>
               )}
               <button
                 onClick={handleConfirmFolder}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useStore } from '../store/useStore'
 import { getFileColor } from '../lib/fileColors'
+import { PromptDialog } from './Dialog'
 import type { FileEntry } from '@shared/types'
 
 function isMd(name: string): boolean {
@@ -97,12 +98,15 @@ function EntryRow({ entry, depth }: EntryRowProps): React.JSX.Element {
   )
 }
 
+type PromptState = { label: string; pending: (value: string) => Promise<void> } | null
+
 export default function FileTree(): React.JSX.Element {
   const { settings, fileTree, setFileTree } = useStore()
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState<FileEntry[] | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
+  const [promptDialog, setPromptDialog] = useState<PromptState>(null)
 
   // Type-to-search: pressing any printable key while focused on the panel focuses the search input
   useEffect(() => {
@@ -152,23 +156,28 @@ export default function FileTree(): React.JSX.Element {
     return () => clearTimeout(t)
   }, [search, settings?.rootFolder])
 
-  const addFolder = async () => {
+  const addFolder = (): void => {
     const root = settings?.rootFolder
     if (!root) return
-    const name = prompt('Ordnername:')
-    if (!name) return
-    const path = root + '/' + name
-    await window.nestor.fs.createFolder(path)
+    setPromptDialog({
+      label: 'Ordnername:',
+      pending: async (name) => {
+        await window.nestor.fs.createFolder(root + '/' + name)
+        await loadTree()
+      }
+    })
   }
 
-  const addFile = async () => {
+  const addFile = (): void => {
     const root = settings?.rootFolder
     if (!root) return
-    const name = prompt('Dateiname (z. B. notiz.md):')
-    if (!name) return
-    const path = root + '/' + name
-    await window.nestor.fs.createFile(path)
-    await loadTree()
+    setPromptDialog({
+      label: 'Dateiname (z. B. notiz.md):',
+      pending: async (name) => {
+        await window.nestor.fs.createFile(root + '/' + name)
+        await loadTree()
+      }
+    })
   }
 
   const displayTree = searchResults ?? fileTree
@@ -246,6 +255,15 @@ export default function FileTree(): React.JSX.Element {
           ))
         )}
       </div>
+
+      {/* Dialog */}
+      {promptDialog && (
+        <PromptDialog
+          label={promptDialog.label}
+          onConfirm={async (value) => { setPromptDialog(null); await promptDialog.pending(value) }}
+          onCancel={() => setPromptDialog(null)}
+        />
+      )}
     </div>
   )
 }
