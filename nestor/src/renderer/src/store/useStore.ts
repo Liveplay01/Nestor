@@ -6,7 +6,8 @@ import type {
   AccessedFile,
   NavSection,
   Settings,
-  FileEntry
+  FileEntry,
+  OpenMarkdownFile
 } from '@shared/types'
 
 interface NestorStore {
@@ -18,6 +19,16 @@ interface NestorStore {
   // Navigation
   activeNav: NavSection
   setActiveNav: (nav: NavSection) => void
+
+  // Markdown editor
+  openMarkdownFile: OpenMarkdownFile | null
+  setOpenMarkdownFile: (f: OpenMarkdownFile | null) => void
+
+  // Panel visibility
+  showFileTree: boolean
+  setShowFileTree: (v: boolean) => void
+  showActivityLog: boolean
+  setShowActivityLog: (v: boolean) => void
 
   // File tree
   fileTree: FileEntry[]
@@ -67,6 +78,14 @@ export const useStore = create<NestorStore>((set) => ({
 
   activeNav: 'chat',
   setActiveNav: (nav) => set({ activeNav: nav }),
+
+  openMarkdownFile: null,
+  setOpenMarkdownFile: (f) => set({ openMarkdownFile: f }),
+
+  showFileTree: true,
+  setShowFileTree: (v) => set({ showFileTree: v }),
+  showActivityLog: true,
+  setShowActivityLog: (v) => set({ showActivityLog: v }),
 
   fileTree: [],
   setFileTree: (tree) => set({ fileTree: tree }),

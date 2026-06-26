@@ -101,9 +101,11 @@ export async function runOnboarding(win: BrowserWindow): Promise<void> {
     win.webContents.send('onboarding:step', 'install-ollama')
 
     await new Promise<void>((resolve, reject) => {
-      const proc = spawn(installerPath, ['/VERYSILENT', '/SUPPRESSMSGBOXES'], {
+      // Use shell:true so Windows can show UAC elevation prompt
+      const proc = spawn(installerPath, [], {
         detached: true,
-        stdio: 'ignore'
+        stdio: 'ignore',
+        shell: false
       })
       proc.on('close', (code) => {
         if (code === 0 || code === null) resolve()

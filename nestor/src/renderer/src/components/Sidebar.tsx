@@ -1,4 +1,5 @@
 import React from 'react'
+import { motion } from 'framer-motion'
 import { useStore } from '../store/useStore'
 import type { NavSection } from '@shared/types'
 
@@ -7,11 +8,13 @@ const ACCENT = '#2563EB'
 interface NavItem {
   id: NavSection
   icon: React.ReactNode
+  label: string
 }
 
 const ICONS: NavItem[] = [
   {
     id: 'home',
+    label: 'Übersicht',
     icon: (
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
         <path d="M4 11.5v7.5a1 1 0 0 0 1 1h3.5v-5h7v5H19a1 1 0 0 0 1-1v-7.5" />
@@ -21,6 +24,7 @@ const ICONS: NavItem[] = [
   },
   {
     id: 'files',
+    label: 'Explorer',
     icon: (
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 7.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8.5A1.5 1.5 0 0 1 20.5 9.5v7.5A1.5 1.5 0 0 1 19 18.5H4.5A1.5 1.5 0 0 1 3 17V7.5z" />
@@ -29,6 +33,7 @@ const ICONS: NavItem[] = [
   },
   {
     id: 'chat',
+    label: 'KI-Chat',
     icon: (
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
         <path d="M4 5.5h16a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H9.5L5 19v-3.5H4a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z" />
@@ -40,20 +45,11 @@ const ICONS: NavItem[] = [
 const BOTTOM_ICONS: NavItem[] = [
   {
     id: 'settings',
+    label: 'Einstellungen',
     icon: (
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="3" />
         <path d="M12 2.5v2.5M12 19v2.5M21.5 12H19M5 12H2.5M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8M18.5 18.5l-1.8-1.8M7.3 7.3L5.5 5.5" />
-      </svg>
-    )
-  },
-  {
-    id: 'help',
-    icon: (
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="9" />
-        <path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.3c-.8.45-1.1.9-1.1 1.9" />
-        <circle cx="12" cy="16.8" r=".7" fill="currentColor" stroke="none" />
       </svg>
     )
   }
@@ -63,21 +59,24 @@ function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; 
   return (
     <button
       onClick={onClick}
-      className="no-select flex items-center justify-center rounded-btn transition-all duration-150"
-      style={{
-        width: 36,
-        height: 36,
-        background: active ? ACCENT + '14' : 'transparent',
-        color: active ? ACCENT : '#71717A'
-      }}
-      onMouseEnter={(e) => {
-        if (!active) (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.04)'
-      }}
-      onMouseLeave={(e) => {
-        if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'
-      }}
+      title={item.label}
+      className="no-select relative flex items-center justify-center rounded-btn btn-press"
+      style={{ width: 36, height: 36 }}
     >
-      {item.icon}
+      {active && (
+        <motion.div
+          layoutId="nav-active-bg"
+          className="absolute inset-0 rounded-btn"
+          style={{ background: ACCENT + '16' }}
+          transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+        />
+      )}
+      <span
+        className="relative z-10 transition-colors duration-150"
+        style={{ color: active ? ACCENT : 'var(--color-text-faint)' }}
+      >
+        {item.icon}
+      </span>
     </button>
   )
 }
@@ -87,8 +86,8 @@ export default function Sidebar(): React.JSX.Element {
 
   return (
     <div
-      className="flex flex-col items-center border-r border-border bg-sidebar py-2.5 gap-1 no-select"
-      style={{ width: 52, minWidth: 52 }}
+      className="flex flex-col items-center border-r border-border py-2.5 gap-1 no-select"
+      style={{ width: 52, minWidth: 52, background: 'var(--color-sidebar)' }}
     >
       {ICONS.map((item) => (
         <NavButton

@@ -1,4 +1,5 @@
-import { ipcMain, BrowserWindow, dialog } from 'electron'
+import { ipcMain, BrowserWindow, dialog, shell, app } from 'electron'
+import fs from 'fs'
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Store = require('electron-store') as typeof import('electron-store').default
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -24,7 +25,12 @@ const store = new Store<{ settings: Settings; history: HistoryItem[] }>({
       model: 'llama3.2:3b',
       language: 'de',
       accentColor: '#2563EB',
-      onboardingComplete: false
+      onboardingComplete: false,
+      aiMode: null,
+      apiKey: '',
+      apiBaseUrl: 'https://api.openai.com/v1',
+      theme: 'light',
+      notifications: true
     },
     history: []
   }
@@ -152,6 +158,41 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
     if (!win) return
     await runOnboarding(win)
   })
+
+  // ── Shell helpers ─────────────────────────────────────────
+  ipcMain.handle('shell:open-path', (_, { path }: { path: string }) => {
+    return shell.openPath(path)
+  })
+  ipcMain.handle('shell:show-in-folder', (_, { path }: { path: string }) => {
+    shell.showItemInFolder(path)
+  })
+  ipcMain.handle('shell:open-external', (_, { url }: { url: string }) => {
+    return shell.openExternal(url)
+  })
+
+  // ── Extended fs ───────────────────────────────────────────
+  ipcMain.handle('fs:write-file', (_, { path: filePath, content }: { path: string; content: string }) => {
+    fs.writeFileSync(filePath, content, 'utf-8')
+  })
+  ipcMain.handle('fs:create-file', (_, { path: filePath }: { path: string }) => {
+    fs.writeFileSync(filePath, '', 'utf-8')
+    const name = filePath.split(/[/\\]/).pop() ?? filePath
+    const item: HistoryItem = {
+      id: Math.random().toString(36).slice(2),
+      type: 'create_folder',
+      verb: 'Erstellt',
+      target: name,
+      time: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
+      timestamp: Date.now(),
+      undone: false,
+      path: filePath
+    }
+    saveHistory(item)
+    return item
+  })
+
+  // ── App info ──────────────────────────────────────────────
+  ipcMain.handle('app:get-version', () => app.getVersion())
 
   // ── Startup: init watcher if folder already set ───────────
   const settings = store.get('settings')

@@ -23,7 +23,17 @@ interface NestorAPI {
     deleteFile: (path: string) => Promise<HistoryItem>
     undo: (id: string) => Promise<void>
     search: (rootPath: string, query: string) => Promise<FileEntry[]>
+    writeFile: (path: string, content: string) => Promise<void>
+    createFile: (path: string) => Promise<HistoryItem>
     onChanged: (cb: (rootPath: string) => void) => () => void
+  }
+  shell: {
+    openPath: (path: string) => Promise<string>
+    showInFolder: (path: string) => Promise<void>
+    openExternal: (url: string) => Promise<void>
+  }
+  app: {
+    getVersion: () => Promise<string>
   }
   ollama: {
     check: () => Promise<OllamaStatus>

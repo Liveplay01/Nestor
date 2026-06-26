@@ -6,7 +6,7 @@
     "author": "Nestor",
     "private": true,
     "scripts": {
-        "dev": "cross-env ELECTRON_RUN_AS_NODE=0 electron-vite dev",
+        "dev": "node scripts/dev.mjs",
         "build": "electron-vite build",
         "preview": "electron-vite preview",
         "dist": "npm run build && electron-builder",

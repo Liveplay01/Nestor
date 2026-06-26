@@ -57,10 +57,20 @@ export interface AccessedFile {
   accessedAt: number
 }
 
-export type NavSection = 'home' | 'files' | 'chat' | 'settings' | 'help'
+export type NavSection = 'home' | 'files' | 'chat' | 'settings'
+
+export type Theme = 'light' | 'dark'
+
+export interface OpenMarkdownFile {
+  path: string
+  name: string
+}
+
+export type AiMode = 'local' | 'api' | null
 
 export type OnboardingStep =
   | 'check'
+  | 'choose-ai-mode'
   | 'install-ollama'
   | 'pull-model'
   | 'choose-folder'
@@ -81,6 +91,11 @@ export interface Settings {
   language: string
   accentColor: string
   onboardingComplete: boolean
+  aiMode: AiMode
+  apiKey?: string
+  apiBaseUrl?: string
+  theme: Theme
+  notifications: boolean
 }
 
 export interface OllamaStatus {

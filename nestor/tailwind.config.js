@@ -4,20 +4,20 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        bg: '#FFFFFF',
-        surface: '#FBFBFC',
-        sidebar: '#F7F7F8',
+        bg: 'var(--color-bg)',
+        surface: 'var(--color-surface)',
+        sidebar: 'var(--color-sidebar)',
         border: {
-          DEFAULT: '#F0F0F2',
-          strong: '#EAEAED'
+          DEFAULT: 'var(--color-border)',
+          strong: 'var(--color-border-strong)'
         },
         text: {
-          primary: '#27272A',
-          secondary: '#3F3F46',
-          muted: '#52525B',
-          faint: '#9A9AA2',
-          ghost: '#A0A0A8',
-          hint: '#B4B4BA'
+          primary: 'var(--color-text-primary)',
+          secondary: 'var(--color-text-secondary)',
+          muted: 'var(--color-text-muted)',
+          faint: 'var(--color-text-faint)',
+          ghost: 'var(--color-text-hint)',
+          hint: 'var(--color-text-hint)'
         },
         accent: {
           DEFAULT: '#2563EB',

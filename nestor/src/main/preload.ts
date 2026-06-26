@@ -24,11 +24,22 @@ contextBridge.exposeInMainWorld('nestor', {
     undo: (id: string) => ipcRenderer.invoke('fs:undo', { id }),
     search: (rootPath: string, query: string) =>
       ipcRenderer.invoke('fs:search', { rootPath, query }),
+    writeFile: (path: string, content: string) =>
+      ipcRenderer.invoke('fs:write-file', { path, content }),
+    createFile: (path: string) => ipcRenderer.invoke('fs:create-file', { path }),
     onChanged: (cb: (rootPath: string) => void) => {
       const handler = (_: unknown, p: string) => cb(p)
       ipcRenderer.on('fs:changed', handler)
       return () => ipcRenderer.removeListener('fs:changed', handler)
     }
+  },
+  shell: {
+    openPath: (path: string) => ipcRenderer.invoke('shell:open-path', { path }),
+    showInFolder: (path: string) => ipcRenderer.invoke('shell:show-in-folder', { path }),
+    openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', { url })
+  },
+  app: {
+    getVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version')
   },
   ollama: {
     check: () => ipcRenderer.invoke('ollama:check'),

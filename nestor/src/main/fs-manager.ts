@@ -167,7 +167,7 @@ export function searchFiles(rootPath: string, query: string): FileEntry[] {
   const q = query.toLowerCase()
 
   function walk(dir: string, depth: number): void {
-    if (depth > 5) return
+    if (depth > 3) return
     let items: string[]
     try {
       items = fs.readdirSync(dir)

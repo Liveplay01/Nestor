@@ -35,8 +35,8 @@ export default function ActivityLog(): React.JSX.Element {
 
   return (
     <div
-      className="flex flex-col border-l border-border bg-surface overflow-y-auto"
-      style={{ width: 260, minWidth: 260 }}
+      className="flex flex-col border-l border-border overflow-y-auto"
+      style={{ width: 260, minWidth: 260, background: 'var(--color-surface)' }}
     >
       {/* ── Anchor Points ─────────────────────────────── */}
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
@@ -57,7 +57,7 @@ export default function ActivityLog(): React.JSX.Element {
           </div>
         ) : (
           anchors.map((a) => (
-            <div key={a.id} className="flex gap-[9px] items-start p-2 rounded-lg cursor-pointer transition-colors duration-100 hover:bg-black/[0.04]">
+            <div key={a.id} className="file-item flex gap-[9px] items-start p-2 rounded-lg cursor-pointer transition-colors duration-100 hover:bg-black/[0.05]">
               <svg width="15" height="15" viewBox="0 0 24 24" fill={ACCENT} stroke="none" style={{ flex: 'none', marginTop: 1 }}>
                 <path d="M6 3.5h12a.5.5 0 0 1 .5.5v16l-6.5-4.3L5.5 20V4a.5.5 0 0 1 .5-.5z" />
               </svg>

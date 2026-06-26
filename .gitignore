@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+nestor/node_modules/
+
+# Build outputs (generated, not source)
+nestor/out/
+nestor/dist/
+nestor/dist-electron/
+nestor/.vite/
+nestor/node_modules/.vite/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local

@@ -1,5 +1,6 @@
 import React from 'react'
 import { useStore } from '../store/useStore'
+import NestorLogo from './NestorLogo'
 
 export default function TitleBar(): React.JSX.Element {
   const settings = useStore((s) => s.settings)
@@ -19,14 +20,7 @@ export default function TitleBar(): React.JSX.Element {
     >
       {/* Left: app identity */}
       <div className="flex items-center gap-2.5 no-drag">
-        <div
-          className="flex items-center justify-center rounded-lg flex-none"
-          style={{ width: 23, height: 23, background: '#2563EB' }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 7.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8.5A1.5 1.5 0 0 1 20.5 9.5v7.5A1.5 1.5 0 0 1 19 18.5H4.5A1.5 1.5 0 0 1 3 17V7.5z" />
-          </svg>
-        </div>
+        <NestorLogo size={24} />
         <span className="text-[13.5px] font-semibold text-text-primary tracking-tight">Nestor</span>
         <span className="text-[12.5px] text-text-hint">/</span>
         <span className="text-[12.5px] text-text-faint">{folderName}</span>
