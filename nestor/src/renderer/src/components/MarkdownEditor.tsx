@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '../store/useStore'
 
 export default function MarkdownEditor(): React.JSX.Element | null {
@@ -6,6 +7,8 @@ export default function MarkdownEditor(): React.JSX.Element | null {
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(true)
   const [saved, setSaved] = useState(true)
+  const [showSavedBadge, setShowSavedBadge] = useState(false)
+  const savedBadgeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const contentRef = useRef(content)
   contentRef.current = content
@@ -19,6 +22,12 @@ export default function MarkdownEditor(): React.JSX.Element | null {
       .finally(() => setLoading(false))
   }, [openMarkdownFile?.path])
 
+  const triggerSavedBadge = useCallback(() => {
+    setShowSavedBadge(true)
+    if (savedBadgeTimer.current) clearTimeout(savedBadgeTimer.current)
+    savedBadgeTimer.current = setTimeout(() => setShowSavedBadge(false), 1600)
+  }, [])
+
   const flushSave = useCallback(async () => {
     if (saveTimer.current) {
       clearTimeout(saveTimer.current)
@@ -27,8 +36,9 @@ export default function MarkdownEditor(): React.JSX.Element | null {
     if (openMarkdownFile && !saved) {
       await window.nestor.fs.writeFile(openMarkdownFile.path, contentRef.current)
       setSaved(true)
+      triggerSavedBadge()
     }
-  }, [openMarkdownFile, saved])
+  }, [openMarkdownFile, saved, triggerSavedBadge])
 
   // Ctrl+S to save immediately
   useEffect(() => {
@@ -49,6 +59,10 @@ export default function MarkdownEditor(): React.JSX.Element | null {
         clearTimeout(saveTimer.current)
         saveTimer.current = null
       }
+      if (savedBadgeTimer.current) {
+        clearTimeout(savedBadgeTimer.current)
+        savedBadgeTimer.current = null
+      }
       if (openMarkdownFile && !saved) {
         window.nestor.fs.writeFile(openMarkdownFile.path, contentRef.current)
       }
@@ -64,6 +78,7 @@ export default function MarkdownEditor(): React.JSX.Element | null {
       if (openMarkdownFile) {
         await window.nestor.fs.writeFile(openMarkdownFile.path, value)
         setSaved(true)
+        triggerSavedBadge()
       }
     }, 800)
   }
@@ -82,8 +97,43 @@ export default function MarkdownEditor(): React.JSX.Element | null {
       >
         <div className="flex-1 min-w-0">
           <div className="text-[13px] font-semibold text-text-primary truncate">{openMarkdownFile.name}</div>
-          <div className="text-[11px] text-text-hint mt-0.5">
-            {saved ? 'Gespeichert' : 'Nicht gespeichert…'}
+          <div className="text-[11px] text-text-hint mt-0.5 flex items-center gap-1">
+            <AnimatePresence mode="wait">
+              {saved ? (
+                showSavedBadge ? (
+                  <motion.span
+                    key="saved-flash"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                    style={{ color: '#16A34A' }}
+                  >
+                    ✓ Gespeichert
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="saved-idle"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                  >
+                    Gespeichert
+                  </motion.span>
+                )
+              ) : (
+                <motion.span
+                  key="unsaved"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  Nicht gespeichert…
+                </motion.span>
+              )}
+            </AnimatePresence>
           </div>
         </div>
         <button

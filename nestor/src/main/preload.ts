@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('nestor', {
     listDir: (path: string) => ipcRenderer.invoke('fs:list-dir', { path }),
     readFile: (path: string) => ipcRenderer.invoke('fs:read-file', { path }),
     createFolder: (path: string) => ipcRenderer.invoke('fs:create-folder', { path }),
+    copyFile: (from: string, to: string) => ipcRenderer.invoke('fs:copy-file', { from, to }),
     moveFile: (from: string, to: string) => ipcRenderer.invoke('fs:move-file', { from, to }),
     renameFile: (path: string, newName: string) =>
       ipcRenderer.invoke('fs:rename-file', { path, newName }),

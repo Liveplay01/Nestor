@@ -124,7 +124,7 @@ export default function Onboarding(): React.JSX.Element {
 
     const init = async (): Promise<void> => {
       const settings = await window.nestor.settings.get()
-      if (settings.onboardingComplete && settings.rootFolder && settings.aiMode) {
+      if (settings.onboardingComplete && settings.rootFolder) {
         setSettings(settings)
         setOnboardingComplete(true)
         return

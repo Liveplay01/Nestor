@@ -18,6 +18,7 @@ interface NestorAPI {
     listDir: (path: string) => Promise<FileEntry[]>
     readFile: (path: string) => Promise<string>
     createFolder: (path: string) => Promise<HistoryItem>
+    copyFile: (from: string, to: string) => Promise<HistoryItem>
     moveFile: (from: string, to: string) => Promise<HistoryItem>
     renameFile: (path: string, newName: string) => Promise<HistoryItem>
     deleteFile: (path: string) => Promise<HistoryItem>
@@ -34,10 +35,12 @@ interface NestorAPI {
   }
   app: {
     getVersion: () => Promise<string>
+    getSpecialFolders: () => Promise<{ desktop: string; downloads: string; documents: string }>
   }
   ollama: {
     check: () => Promise<OllamaStatus>
     models: () => Promise<string[]>
+    testApi: (apiKey: string, baseUrl: string) => Promise<{ ok: boolean; message: string }>
     chat: (
       messages: OllamaChatMessage[],
       systemPrompt: string,

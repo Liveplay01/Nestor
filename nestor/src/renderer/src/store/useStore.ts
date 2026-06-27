@@ -7,7 +7,8 @@ import type {
   NavSection,
   Settings,
   FileEntry,
-  OpenMarkdownFile
+  OpenMarkdownFile,
+  ToastItem
 } from '@shared/types'
 
 interface NestorStore {
@@ -38,9 +39,10 @@ interface NestorStore {
 
   // Chat
   messages: Message[]
+  setMessages: (msgs: Message[]) => void
   addMessage: (m: Message) => void
   appendToken: (id: string, token: string) => void
-  finalizeMessage: (id: string) => void
+  finalizeMessage: (id: string, text?: string) => void
   clearMessages: () => void
   isTyping: boolean
   setTyping: (v: boolean) => void
@@ -66,6 +68,11 @@ interface NestorStore {
   // Onboarding
   onboardingComplete: boolean
   setOnboardingComplete: (v: boolean) => void
+
+  // Toasts
+  toasts: ToastItem[]
+  addToast: (t: Omit<ToastItem, 'id'>) => void
+  dismissToast: (id: string) => void
 }
 
 export const useStore = create<NestorStore>((set) => ({
@@ -99,6 +106,7 @@ export const useStore = create<NestorStore>((set) => ({
     }),
 
   messages: [],
+  setMessages: (msgs) => set({ messages: msgs }),
   addMessage: (m) => set((state) => ({ messages: [...state.messages, m] })),
   appendToken: (id, token) =>
     set((state) => ({
@@ -106,10 +114,10 @@ export const useStore = create<NestorStore>((set) => ({
         m.id === id ? { ...m, text: m.text + token } : m
       )
     })),
-  finalizeMessage: (id) =>
+  finalizeMessage: (id, text) =>
     set((state) => ({
       messages: state.messages.map((m) =>
-        m.id === id ? { ...m, isStreaming: false } : m
+        m.id === id ? { ...m, isStreaming: false, ...(text !== undefined ? { text } : {}) } : m
       )
     })),
   clearMessages: () =>
@@ -143,5 +151,9 @@ export const useStore = create<NestorStore>((set) => ({
     }),
 
   onboardingComplete: false,
-  setOnboardingComplete: (v) => set({ onboardingComplete: v })
+  setOnboardingComplete: (v) => set({ onboardingComplete: v }),
+
+  toasts: [],
+  addToast: (t) => set((state) => ({ toasts: [...state.toasts, { ...t, id: Math.random().toString(36).slice(2) }] })),
+  dismissToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }))
 }))

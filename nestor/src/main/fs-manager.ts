@@ -84,6 +84,32 @@ export function createFolder(folderPath: string): HistoryItem {
   }
 }
 
+export function assertWithinRoot(rootPath: string, targetPath: string): void {
+  if (!rootPath) return
+  const root = path.resolve(rootPath)
+  const target = path.resolve(targetPath)
+  if (target !== root && !target.startsWith(root + path.sep)) {
+    throw new Error(`Access denied: "${target}" is outside the root folder`)
+  }
+}
+
+export function copyFile(from: string, to: string): HistoryItem {
+  fs.copyFileSync(from, to)
+  const fromName = path.basename(from)
+  const toDir = path.basename(path.dirname(to))
+  return {
+    id: randomUUID(),
+    type: 'move_file',
+    verb: 'Kopiert',
+    target: `${fromName} → ${toDir}`,
+    time: formatTime(new Date()),
+    timestamp: Date.now(),
+    undone: false,
+    from,
+    to
+  }
+}
+
 export function moveFile(from: string, to: string): HistoryItem {
   fs.renameSync(from, to)
   const fromName = path.basename(from)
@@ -143,6 +169,11 @@ export function undoAction(item: HistoryItem): void {
       if (item.path && fs.existsSync(item.path)) {
         const entries = fs.readdirSync(item.path)
         if (entries.length === 0) fs.rmdirSync(item.path)
+      }
+      break
+    case 'create_file':
+      if (item.path && fs.existsSync(item.path)) {
+        fs.unlinkSync(item.path)
       }
       break
     case 'delete_file':

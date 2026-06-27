@@ -27,7 +27,7 @@ export interface Message {
   isStreaming?: boolean
 }
 
-export type HistoryActionType = 'create_folder' | 'move_file' | 'rename_file' | 'delete_file'
+export type HistoryActionType = 'create_folder' | 'create_file' | 'move_file' | 'rename_file' | 'delete_file'
 
 export interface HistoryItem {
   id: string
@@ -113,4 +113,11 @@ export interface FsResult<T = void> {
   ok: boolean
   data?: T
   error?: string
+}
+
+export interface ToastItem {
+  id: string
+  type: 'success' | 'error' | 'info'
+  message: string
+  duration?: number
 }

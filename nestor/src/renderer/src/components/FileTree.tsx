@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '../store/useStore'
 import { getFileColor } from '../lib/fileColors'
 import { PromptDialog } from './Dialog'
@@ -59,18 +60,21 @@ function EntryRow({ entry, depth }: EntryRowProps): React.JSX.Element {
           <span className="text-[13px] font-medium">{entry.name}</span>
         </div>
 
-        <div
-          style={{
-            overflow: 'hidden',
-            maxHeight: isOpen ? '2000px' : '0px',
-            opacity: isOpen ? 1 : 0,
-            transition: 'max-height 0.32s cubic-bezier(.4,0,.2,1), opacity 0.25s ease'
-          }}
-        >
-          {entry.children?.map((child) => (
-            <EntryRow key={child.path} entry={child} depth={depth + 1} />
-          ))}
-        </div>
+        <AnimatePresence initial={false}>
+          {isOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+              style={{ overflow: 'hidden' }}
+            >
+              {entry.children?.map((child) => (
+                <EntryRow key={child.path} entry={child} depth={depth + 1} />
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </>
     )
   }

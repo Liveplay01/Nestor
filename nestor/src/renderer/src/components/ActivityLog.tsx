@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react'
+import { motion } from 'framer-motion'
 import { useStore } from '../store/useStore'
-
-const ACCENT = '#2563EB'
 
 const DOT_COLORS: Record<string, string> = {
   create_folder: '#16A34A',
-  move_file: '#2563EB',
+  create_file: '#16A34A',
+  move_file: 'var(--color-accent)',
   rename_file: '#A1A1AA',
   delete_file: '#EF4444'
 }
@@ -18,7 +18,7 @@ export default function ActivityLog(): React.JSX.Element {
     window.nestor.history.get().then((h) => {
       if (Array.isArray(h)) setHistory(h as Parameters<typeof setHistory>[0])
     })
-  }, [setHistory])
+  }, [])
 
   // Listen for history updates from main process
   useEffect(() => {
@@ -69,7 +69,7 @@ export default function ActivityLog(): React.JSX.Element {
         ) : (
           anchors.map((a) => (
             <div key={a.id} className="file-item flex gap-[9px] items-start p-2 rounded-lg cursor-pointer transition-colors duration-100 hover:bg-black/[0.05]">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill={ACCENT} stroke="none" style={{ flex: 'none', marginTop: 1 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill={'var(--color-accent)'} stroke="none" style={{ flex: 'none', marginTop: 1 }}>
                 <path d="M6 3.5h12a.5.5 0 0 1 .5.5v16l-6.5-4.3L5.5 20V4a.5.5 0 0 1 .5-.5z" />
               </svg>
               <div className="min-w-0">
@@ -124,8 +124,14 @@ export default function ActivityLog(): React.JSX.Element {
         {history.length === 0 ? (
           <div className="text-[12px] text-text-hint px-3 py-2">Noch keine Aktionen.</div>
         ) : (
-          history.slice(0, 50).map((item) => (
-            <div key={item.id} className="flex gap-2.5 px-3 py-[9px] items-start rounded-lg transition-colors duration-100 hover:bg-black/[0.04]">
+          history.slice(0, 50).map((item, i) => (
+            <motion.div
+              key={item.id}
+              initial={{ opacity: 0, x: 6 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: Math.min(i, 12) * 0.04, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+              className="flex gap-2.5 px-3 py-[9px] items-start rounded-lg transition-colors duration-100 hover:bg-black/[0.04]"
+            >
               <span
                 className="rounded-full flex-none"
                 style={{ width: 7, height: 7, marginTop: 5, background: item.undone ? '#A1A1AA' : (DOT_COLORS[item.type] ?? '#A1A1AA') }}
@@ -153,7 +159,7 @@ export default function ActivityLog(): React.JSX.Element {
                       onClick={() => handleUndo(item.id)}
                       title={`${item.verb}: ${item.target} rückgängig machen`}
                       className="text-[11px] font-medium inline-flex items-center gap-[3px] p-0 border-none bg-transparent cursor-pointer hover:underline"
-                      style={{ color: ACCENT }}
+                      style={{ color: 'var(--color-accent)' }}
                     >
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M4 8a8 8 0 1 1-1 6" /><path d="M4 4v4h4" />
@@ -170,7 +176,7 @@ export default function ActivityLog(): React.JSX.Element {
                   )}
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))
         )}
       </div>

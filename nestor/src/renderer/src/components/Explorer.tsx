@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { motion } from 'framer-motion'
 import { useStore } from '../store/useStore'
 import { getFileColor } from '../lib/fileColors'
 import { ConfirmDialog, PromptDialog } from './Dialog'
@@ -50,8 +51,11 @@ function ContextMenu({ menu, onClose, onAction }: {
       ]
 
   return (
-    <div
+    <motion.div
       ref={ref}
+      initial={{ opacity: 0, scale: 0.95, y: -4 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ duration: 0.12, ease: [0.4, 0, 0.2, 1] }}
       className="fixed z-50 py-1 rounded-lg border border-border-strong shadow-window text-[13px]"
       style={{ top: menu.y, left: menu.x, minWidth: 180, background: 'var(--color-bg)' }}
     >
@@ -69,7 +73,7 @@ function ContextMenu({ menu, onClose, onAction }: {
           </button>
         )
       )}
-    </div>
+    </motion.div>
   )
 }
 
@@ -305,9 +309,14 @@ export default function Explorer(): React.JSX.Element {
     if (!clipboard) return
     const sep = currentPath.includes('/') ? '/' : '\\'
     const dest = `${currentPath}${sep}${clipboard.entry.name}`
-    const item = await window.nestor.fs.moveFile(clipboard.entry.path, dest)
+    let item
+    if (clipboard.cut) {
+      item = await window.nestor.fs.moveFile(clipboard.entry.path, dest)
+      setClipboard(null)
+    } else {
+      item = await window.nestor.fs.copyFile(clipboard.entry.path, dest)
+    }
     if (item) addHistoryItem(item)
-    if (clipboard.cut) setClipboard(null)
     loadEntries(currentPath)
   }
 

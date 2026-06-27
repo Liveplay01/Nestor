@@ -1,5 +1,6 @@
 import { ipcMain, BrowserWindow, dialog, shell, app } from 'electron'
 import fs from 'fs'
+import path from 'path'
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Store = require('electron-store') as typeof import('electron-store').default
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -8,11 +9,13 @@ import {
   listDir,
   readFile,
   createFolder,
+  copyFile,
   moveFile,
   renameFile,
   deleteFile,
   undoAction,
-  searchFiles
+  searchFiles,
+  assertWithinRoot
 } from './fs-manager'
 import { checkOllama, streamChat, getAvailableModels, testExternalApi } from './ollama'
 import { runOnboarding } from './onboarding'
@@ -81,13 +84,27 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
     return readFile(path)
   })
 
-  ipcMain.handle('fs:create-folder', (_, { path }: { path: string }) => {
-    const item = createFolder(path)
+  ipcMain.handle('fs:create-folder', (_, { path: p }: { path: string }) => {
+    const root = store.get('settings').rootFolder
+    assertWithinRoot(root, p)
+    const item = createFolder(p)
+    saveHistory(item)
+    return item
+  })
+
+  ipcMain.handle('fs:copy-file', (_, { from, to }: { from: string; to: string }) => {
+    const root = store.get('settings').rootFolder
+    assertWithinRoot(root, from)
+    assertWithinRoot(root, to)
+    const item = copyFile(from, to)
     saveHistory(item)
     return item
   })
 
   ipcMain.handle('fs:move-file', (_, { from, to }: { from: string; to: string }) => {
+    const root = store.get('settings').rootFolder
+    assertWithinRoot(root, from)
+    assertWithinRoot(root, to)
     const item = moveFile(from, to)
     saveHistory(item)
     return item
@@ -95,15 +112,19 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
 
   ipcMain.handle(
     'fs:rename-file',
-    (_, { path, newName }: { path: string; newName: string }) => {
-      const item = renameFile(path, newName)
+    (_, { path: p, newName }: { path: string; newName: string }) => {
+      const root = store.get('settings').rootFolder
+      assertWithinRoot(root, p)
+      const item = renameFile(p, newName)
       saveHistory(item)
       return item
     }
   )
 
-  ipcMain.handle('fs:delete-file', async (_, { path }: { path: string }) => {
-    const item = await deleteFile(path)
+  ipcMain.handle('fs:delete-file', async (_, { path: p }: { path: string }) => {
+    const root = store.get('settings').rootFolder
+    assertWithinRoot(root, p)
+    const item = await deleteFile(p)
     saveHistory(item)
     return item
   })
@@ -177,15 +198,19 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
 
   // ── Extended fs ───────────────────────────────────────────
   ipcMain.handle('fs:write-file', (_, { path: filePath, content }: { path: string; content: string }) => {
+    const root = store.get('settings').rootFolder
+    assertWithinRoot(root, filePath)
     fs.writeFileSync(filePath, content, 'utf-8')
   })
   ipcMain.handle('fs:create-file', (_, { path: filePath }: { path: string }) => {
+    const root = store.get('settings').rootFolder
+    assertWithinRoot(root, filePath)
     fs.writeFileSync(filePath, '', 'utf-8')
-    const name = filePath.split(/[/\\]/).pop() ?? filePath
+    const name = path.basename(filePath)
     const item: HistoryItem = {
       id: Math.random().toString(36).slice(2),
-      type: 'create_folder',
-      verb: 'Erstellt',
+      type: 'create_file',
+      verb: 'Datei erstellt',
       target: name,
       time: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
       timestamp: Date.now(),

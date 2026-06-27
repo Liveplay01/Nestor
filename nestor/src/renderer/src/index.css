@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Theme transition — active only during the 220ms switch window */
+html.theme-transitioning,
+html.theme-transitioning * {
+  transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease !important;
+}
+
 :root {
   --color-bg: #FFFFFF;
   --color-surface: #FBFBFC;
@@ -13,6 +19,7 @@
   --color-text-muted: #52525B;
   --color-text-faint: #9A9AA2;
   --color-text-hint: #B4B4BA;
+  --color-accent: #2563EB;
 }
 
 [data-theme="dark"] {
@@ -57,7 +64,7 @@ input, button, textarea {
   font-family: inherit;
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar — light */
 ::-webkit-scrollbar {
   width: 11px;
   height: 11px;
@@ -74,6 +81,16 @@ input, button, textarea {
 }
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Custom scrollbar — dark */
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #2A2A2E;
+  background-clip: content-box;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: #3A3A40;
+  background-clip: content-box;
 }
 
 /* No text selection on UI chrome */
@@ -99,7 +116,7 @@ input, button, textarea {
   position: absolute;
   left: 0; top: 20%; bottom: 20%;
   width: 2px;
-  background: #2563EB;
+  background: var(--color-accent);
   border-radius: 0 2px 2px 0;
   opacity: 0;
   transform: scaleY(0.4);
@@ -114,7 +131,7 @@ input, button, textarea {
 
 /* Drag over highlight */
 .drag-over {
-  outline: 2px dashed #2563EB;
+  outline: 2px dashed var(--color-accent);
   outline-offset: -4px;
   background: rgba(37,99,235,0.04) !important;
 }
@@ -129,10 +146,34 @@ input, button, textarea {
 }
 .anim-fade-up { animation: fadeSlideUp 0.28s cubic-bezier(0.4,0,0.2,1) both; }
 
+/* ── Streaming cursor ──────────────────────────────────── */
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+.streaming-cursor {
+  display: inline-block;
+  width: 1.5px;
+  height: 14px;
+  vertical-align: middle;
+  margin-left: 2px;
+  background: var(--color-accent);
+  border-radius: 1px;
+  animation: cursorBlink 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
 /* Drag region for custom title bar */
 .drag-region {
   -webkit-app-region: drag;
 }
 .no-drag {
   -webkit-app-region: no-drag;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

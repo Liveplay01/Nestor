@@ -20,9 +20,9 @@ module.exports = {
           hint: 'var(--color-text-hint)'
         },
         accent: {
-          DEFAULT: '#2563EB',
-          soft: '#2563EB14',
-          focus: '#C7D6F8'
+          DEFAULT: 'var(--color-accent)',
+          soft: 'rgba(37,99,235,0.08)',
+          focus: 'rgba(37,99,235,0.18)'
         },
         file: {
           pdf: '#F97316',
@@ -53,7 +53,7 @@ module.exports = {
       boxShadow: {
         window: '0 30px 70px -22px rgba(20,22,34,.30), 0 4px 14px -6px rgba(20,22,34,.10)',
         input: '0 2px 12px -5px rgba(20,22,34,.10)',
-        'input-focus': '0 0 0 3px #2563EB14, 0 2px 12px -5px rgba(20,22,34,.10)',
+        'input-focus': '0 0 0 3px rgba(37,99,235,0.12), 0 2px 12px -5px rgba(20,22,34,.10)',
         card: '0 1px 3px rgba(20,22,34,.05)'
       },
       animation: {

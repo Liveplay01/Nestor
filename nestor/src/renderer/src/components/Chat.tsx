@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '../store/useStore'
 import { getFileColor } from '../lib/fileColors'
@@ -7,8 +7,6 @@ import { randomId, formatTime } from '../lib/utils'
 import type { Message, HistoryItem, FileEntry } from '@shared/types'
 import NestorLogo from './NestorLogo'
 import NestorAnimation from './NestorAnimation'
-
-const ACCENT = '#2563EB'
 
 type AiStatus = 'green' | 'yellow' | 'red'
 type ContextFile = { name: string; path: string; color: string }
@@ -55,7 +53,7 @@ Du kannst auch Dateien aus dem Dateibaum links in dieses Fenster ziehen, um sie 
 const WORKFLOW_CARDS = [
   {
     icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 7.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8.5A1.5 1.5 0 0 1 20.5 9.5V17a1.5 1.5 0 0 1-1.5 1.5H4.5A1.5 1.5 0 0 1 3 17V7.5z" />
         <path d="M9 13l2 2 4-4" />
       </svg>
@@ -132,7 +130,8 @@ function FileChipIcon({ color }: { color: string }): React.JSX.Element {
   )
 }
 
-function MessageBubble({ msg, onAnchor }: { msg: Message; onAnchor: (m: Message) => void }): React.JSX.Element {
+// Memoized — only re-renders when this specific message changes
+const MessageBubble = memo(function MessageBubble({ msg, onAnchor }: { msg: Message; onAnchor: (m: Message) => void }): React.JSX.Element {
   if (msg.role === 'user') {
     return (
       <motion.div
@@ -177,7 +176,6 @@ function MessageBubble({ msg, onAnchor }: { msg: Message; onAnchor: (m: Message)
         </div>
         <div className="text-[14px] leading-[1.65] text-text-secondary whitespace-pre-wrap">
           {msg.text}
-          {msg.isStreaming && <span className="inline-block w-0.5 h-4 bg-accent ml-px animate-pulse" />}
         </div>
         {msg.chips && msg.chips.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-3">
@@ -194,6 +192,34 @@ function MessageBubble({ msg, onAnchor }: { msg: Message; onAnchor: (m: Message)
           </div>
         )}
         {msg.text2 && <div className="text-[14px] leading-[1.65] text-text-secondary mt-3">{msg.text2}</div>}
+      </div>
+    </motion.div>
+  )
+})
+
+// ─── Streaming Bubble — DOM-direct, zero store updates per token ───────────
+
+function StreamingBubble({ msg, textDomRef }: { msg: Message; textDomRef: React.RefObject<HTMLDivElement | null> }): React.JSX.Element {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+      className="flex gap-3"
+    >
+      <div className="flex-none" style={{ width: 27, height: 27 }}>
+        <NestorLogo size={27} />
+      </div>
+      <div className="flex-1 min-w-0 pt-px">
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className="text-[13px] font-semibold text-text-primary">Nestor</span>
+          {msg.time && <span className="text-[11.5px] text-text-hint">{msg.time}</span>}
+        </div>
+        <div
+          ref={textDomRef}
+          className="text-[14px] leading-[1.65] text-text-secondary whitespace-pre-wrap"
+        />
+        <span className="streaming-cursor" />
       </div>
     </motion.div>
   )
@@ -263,14 +289,52 @@ function AtMenu({
   )
 }
 
+// ─── Action Review helpers ─────────────────────────────────────────────────
+
+type PendingAction = Record<string, string>
+
+function basename(p: string): string { return p.split(/[/\\]/).pop() ?? p }
+
+function describeAction(a: PendingAction): { label: string; accent: string; icon: React.JSX.Element } {
+  const iconProps = { width: 13, height: 13, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.9', strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+  switch (a.tool) {
+    case 'create_folder': return {
+      label: `Ordner erstellen: ${basename(a.path)}`,
+      accent: 'var(--color-accent)',
+      icon: <svg {...iconProps}><path d="M3 7.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8.5A1.5 1.5 0 0 1 20.5 9.5V17a1.5 1.5 0 0 1-1.5 1.5H4.5A1.5 1.5 0 0 1 3 17V7.5z"/><path d="M12 11v4M10 13h4"/></svg>
+    }
+    case 'move_file': return {
+      label: `Verschieben: ${basename(a.from)} → ${basename(a.to)}`,
+      accent: '#6B7280',
+      icon: <svg {...iconProps}><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    }
+    case 'rename_file': return {
+      label: `Umbenennen: ${basename(a.path)} → ${a.newName}`,
+      accent: '#6B7280',
+      icon: <svg {...iconProps}><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+    }
+    case 'delete_file': return {
+      label: `In Papierkorb: ${basename(a.path)}`,
+      accent: '#DC2626',
+      icon: <svg {...iconProps}><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+    }
+    default: return {
+      label: `${a.tool}: ${basename(a.path ?? a.from ?? '')}`,
+      accent: '#6B7280',
+      icon: <svg {...iconProps}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    }
+  }
+}
+
 // ─── Main Chat ─────────────────────────────────────────────────────────────
 
 export default function Chat(): React.JSX.Element {
   const {
-    messages, addMessage, appendToken, finalizeMessage, clearMessages,
+    messages, setMessages, addMessage, finalizeMessage, clearMessages,
     isTyping, setTyping, chatTitle, setChatTitle, chatStartTime, setChatStartTime,
     setFilesInContext, settings, addHistoryItem, addAnchor, addAccessedFile,
-    fileTree, showFileTree, setShowFileTree, showActivityLog, setShowActivityLog
+    fileTree, showFileTree, setShowFileTree, showActivityLog, setShowActivityLog,
+    addToast
   } = useStore()
 
   const [input, setInput] = useState('')
@@ -280,25 +344,37 @@ export default function Chat(): React.JSX.Element {
   const [isDragOver, setIsDragOver] = useState(false)
   const [atQuery, setAtQuery] = useState<string | null>(null)
   const [atStartIdx, setAtStartIdx] = useState(-1)
+  const [pendingActions, setPendingActions] = useState<PendingAction[]>([])
 
   const msgRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Streaming: accumulates tokens without touching React/Zustand state
+  const streamingTextRef = useRef('')
+  const streamingDomRef = useRef<HTMLDivElement | null>(null)
+  const rafRef = useRef<number | null>(null)
+
   const allFiles = flattenTree(fileTree)
 
-  // On mount: restore saved messages, then show welcome if first launch
+  // On mount: batch-load saved messages (one state update, not N)
+  // Guard: if store already has messages (user navigated away and back), skip reload
   useEffect(() => {
+    if (useStore.getState().messages.length > 0) return
+
     const CHAT_KEY = 'nestor_chat_v1'
     let savedMsgs: Message[] = []
     try {
       const raw = localStorage.getItem(CHAT_KEY)
       if (raw) savedMsgs = (JSON.parse(raw) as Message[]).filter((m) => !m.isStreaming && m.text)
     } catch {}
-    savedMsgs.forEach((m) => addMessage(m))
 
-    if (savedMsgs.length === 0 && !localStorage.getItem(WELCOME_KEY)) {
-      addMessage({ id: randomId(), role: 'ai', text: WELCOME_MESSAGE, time: formatTime(new Date()), isStreaming: false })
+    const needsWelcome = savedMsgs.length === 0 && !localStorage.getItem(WELCOME_KEY)
+    if (needsWelcome) {
+      const welcome: Message = { id: randomId(), role: 'ai', text: WELCOME_MESSAGE, time: formatTime(new Date()), isStreaming: false }
+      setMessages([welcome])
       localStorage.setItem(WELCOME_KEY, '1')
+    } else if (savedMsgs.length > 0) {
+      setMessages(savedMsgs)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -336,56 +412,101 @@ export default function Chat(): React.JSX.Element {
     return () => clearInterval(id)
   }, [settings?.aiMode, settings?.apiKey, settings?.model])
 
-  // Auto-scroll
+  // Auto-scroll: on messages change or when streaming starts
   useEffect(() => {
     const el = msgRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [messages, isTyping])
 
-  // IPC stream handlers
+  // IPC stream handlers — tokens go directly to DOM via RAF, zero store updates
   const executeActions = useCallback(async (actions: Record<string, string>[]) => {
     for (const action of actions) {
       try {
         let item: HistoryItem | undefined
-        if (action.tool === 'create_folder' && action.path) item = await window.nestor.fs.createFolder(action.path)
-        else if (action.tool === 'move_file' && action.from && action.to) item = await window.nestor.fs.moveFile(action.from, action.to)
-        else if (action.tool === 'rename_file' && action.path && action.newName) item = await window.nestor.fs.renameFile(action.path, action.newName)
-        else if (action.tool === 'delete_file' && action.path) item = await window.nestor.fs.deleteFile(action.path)
-        else if (action.tool === 'read_file' && action.path) {
+        if (action.tool === 'create_folder' && action.path) {
+          item = await window.nestor.fs.createFolder(action.path)
+          const name = action.path.split(/[/\\]/).pop() ?? action.path
+          addToast({ type: 'success', message: `Ordner erstellt: ${name}` })
+        } else if (action.tool === 'move_file' && action.from && action.to) {
+          item = await window.nestor.fs.moveFile(action.from, action.to)
+          const name = action.from.split(/[/\\]/).pop() ?? action.from
+          addToast({ type: 'success', message: `Verschoben: ${name}` })
+        } else if (action.tool === 'rename_file' && action.path && action.newName) {
+          item = await window.nestor.fs.renameFile(action.path, action.newName)
+          addToast({ type: 'success', message: `Umbenannt: ${action.newName}` })
+        } else if (action.tool === 'delete_file' && action.path) {
+          item = await window.nestor.fs.deleteFile(action.path)
+          const name = action.path.split(/[/\\]/).pop() ?? action.path
+          addToast({ type: 'info', message: `In Papierkorb: ${name}` })
+        } else if (action.tool === 'read_file' && action.path) {
           await window.nestor.fs.readFile(action.path)
           const name = action.path.split(/[/\\]/).pop() ?? action.path
           addAccessedFile({ name, path: action.path, color: getFileColor(name), accessedAt: Date.now() })
         }
         if (item) addHistoryItem(item)
-      } catch (e) { console.error('Action error:', action, e) }
+      } catch (e) {
+        console.error('Action error:', action, e)
+        addToast({ type: 'error', message: 'Aktion fehlgeschlagen. Bitte erneut versuchen.' })
+      }
     }
-  }, [addHistoryItem, addAccessedFile])
+  }, [addHistoryItem, addAccessedFile, addToast])
 
   useEffect(() => {
     const currentStreamId = { val: '' }
-    const unToken = window.nestor.ollama.onToken((token) => { if (currentStreamId.val) appendToken(currentStreamId.val, token) })
+
+    const unToken = window.nestor.ollama.onToken((token) => {
+      if (!currentStreamId.val) return
+      streamingTextRef.current += token
+      // Batch DOM updates to animation frames — smooth and efficient
+      if (rafRef.current === null) {
+        rafRef.current = requestAnimationFrame(() => {
+          if (streamingDomRef.current) {
+            streamingDomRef.current.textContent = streamingTextRef.current
+            // Keep scroll pinned to bottom while streaming
+            const el = msgRef.current
+            if (el) el.scrollTop = el.scrollHeight
+          }
+          rafRef.current = null
+        })
+      }
+    })
+
     const unDone = window.nestor.ollama.onDone(async () => {
       const sid = currentStreamId.val
       if (!sid) return
-      finalizeMessage(sid)
-      const msg = useStore.getState().messages.find((m) => m.id === sid)
-      if (msg) {
-        const { clean, actions } = parseActions(msg.text)
-        if (actions.length > 0) {
-          useStore.setState((s) => ({ messages: s.messages.map((m) => m.id === sid ? { ...m, text: clean } : m) }))
-          await executeActions(actions)
-        }
+
+      // Flush pending RAF
+      if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
+
+      // Write to store exactly ONCE with the complete text
+      const finalText = streamingTextRef.current
+      streamingTextRef.current = ''
+
+      const { clean, actions } = parseActions(finalText)
+      finalizeMessage(sid, actions.length > 0 ? clean : finalText)
+      if (actions.length > 0) {
+        setPendingActions(actions)
       }
-      setTyping(false); setStreamingId(null); currentStreamId.val = ''
+
+      setTyping(false)
+      setStreamingId(null)
+      currentStreamId.val = ''
     })
+
     const unError = window.nestor.ollama.onError((err) => {
       const sid = currentStreamId.val
-      if (sid) useStore.setState((s) => ({ messages: s.messages.map((m) => m.id === sid ? { ...m, text: friendlyError(err), isStreaming: false } : m) }))
+      if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
+      streamingTextRef.current = ''
+      if (sid) finalizeMessage(sid, friendlyError(err))
       setTyping(false); setStreamingId(null); currentStreamId.val = ''
     })
-    ;(window as { __nestorSetStreamId?: (id: string) => void }).__nestorSetStreamId = (id) => { currentStreamId.val = id }
+
+    ;(window as { __nestorSetStreamId?: (id: string) => void }).__nestorSetStreamId = (id) => {
+      currentStreamId.val = id
+      streamingTextRef.current = ''
+    }
     return () => { unToken(); unDone(); unError() }
-  }, [appendToken, finalizeMessage, setTyping, executeActions])
+  }, [finalizeMessage, setTyping, executeActions])
 
   // Send message — with optional context files
   const sendMessage = useCallback(async (text: string, files: ContextFile[] = contextFiles) => {
@@ -487,7 +608,7 @@ export default function Chat(): React.JSX.Element {
   return (
     <div
       className="flex-1 flex flex-col min-w-0"
-      style={{ background: 'var(--color-bg)' }}
+      style={{ background: 'var(--color-bg)', cursor: isDragOver ? 'copy' : undefined }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -500,9 +621,9 @@ export default function Chat(): React.JSX.Element {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="absolute inset-0 z-40 pointer-events-none flex items-center justify-center"
-            style={{ background: 'rgba(37,99,235,0.06)', border: '2px dashed #2563EB', borderRadius: 0 }}
+            style={{ background: 'rgba(37,99,235,0.06)', border: '2px dashed var(--color-accent)', borderRadius: 0 }}
           >
-            <div className="flex flex-col items-center gap-3 text-accent">
+            <div className="flex flex-col items-center gap-3" style={{ color: 'var(--color-accent)' }}>
               <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
                 <line x1="12" y1="18" x2="12" y2="12" /><polyline points="9 15 12 12 15 15" />
@@ -535,13 +656,24 @@ export default function Chat(): React.JSX.Element {
         </div>
 
         <div className="flex items-center gap-2 flex-none">
-          {/* AI Status */}
+          {/* AI Status — pulses when typing */}
           <div
             title={STATUS_TOOLTIPS[aiStatus]}
             className="flex items-center gap-[7px] h-[29px] px-[11px] border border-border-strong rounded-full cursor-help"
             style={{ background: 'var(--color-bg)' }}
           >
-            <span className="w-1.5 h-1.5 rounded-full flex-none transition-colors duration-500" style={{ background: STATUS_COLORS[aiStatus], boxShadow: `0 0 0 3px ${STATUS_GLOW[aiStatus]}` }} />
+            <span className="relative flex items-center justify-center w-1.5 h-1.5 flex-none">
+              <span
+                className="w-1.5 h-1.5 rounded-full flex-none"
+                style={{ background: STATUS_COLORS[aiStatus] }}
+              />
+              {isTyping && (
+                <span
+                  className="absolute inline-flex rounded-full animate-ping opacity-60"
+                  style={{ width: 10, height: 10, background: STATUS_COLORS[aiStatus] }}
+                />
+              )}
+            </span>
             <span className="text-[12px] font-medium text-text-muted whitespace-nowrap">{STATUS_LABELS[aiStatus]}</span>
           </div>
 
@@ -554,8 +686,8 @@ export default function Chat(): React.JSX.Element {
               }}
               disabled={isTyping}
               title="Ordner automatisch analysieren"
-              className="btn-press flex items-center gap-1.5 h-[29px] px-3 border border-border-strong rounded-md text-[12.5px] font-medium transition-colors duration-150 hover:bg-surface disabled:opacity-40"
-              style={{ background: 'var(--color-bg)', color: '#2563EB', borderColor: '#C7D6F8' }}
+              className="btn-press flex items-center gap-1.5 h-[29px] px-3 border rounded-md text-[12.5px] font-medium transition-colors duration-150 hover:bg-surface disabled:opacity-40"
+              style={{ background: 'var(--color-bg)', color: 'var(--color-accent)', borderColor: '#C7D6F8' }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
@@ -634,9 +766,11 @@ export default function Chat(): React.JSX.Element {
           </div>
         ) : (
           <div className="max-w-[760px] mx-auto px-7 flex flex-col gap-[26px]">
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id} msg={msg} onAnchor={handleAnchor} />
-            ))}
+            {messages.map((msg) =>
+              msg.id === streamingId
+                ? <StreamingBubble key={msg.id} msg={msg} textDomRef={streamingDomRef} />
+                : <MessageBubble key={msg.id} msg={msg} onAnchor={handleAnchor} />
+            )}
             {isTyping && !streamingId && (
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3 items-center">
                 <NestorAnimation size={36} />
@@ -645,6 +779,80 @@ export default function Chat(): React.JSX.Element {
           </div>
         )}
       </div>
+
+      {/* Action Review Panel */}
+      <AnimatePresence>
+        {pendingActions.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+            className="mx-6 mb-3 rounded-xl border overflow-hidden"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border-strong)' }}
+          >
+            <div
+              className="flex items-center justify-between px-4 py-2.5 border-b"
+              style={{ borderColor: 'var(--color-border)' }}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] font-semibold text-text-primary">Geplante Aktionen</span>
+                <span
+                  className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded-md"
+                  style={{ background: 'var(--color-accent)', color: '#fff' }}
+                >
+                  {pendingActions.length}
+                </span>
+              </div>
+              <button
+                onClick={() => { setPendingActions([]); addToast({ type: 'info', message: 'Aktionen abgebrochen.' }) }}
+                className="flex items-center justify-center rounded text-text-faint transition-colors hover:text-text-muted"
+                style={{ width: 22, height: 22 }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="px-4 py-2.5 flex flex-col gap-2">
+              {pendingActions.map((action, i) => {
+                const { icon, label, accent } = describeAction(action)
+                return (
+                  <div key={i} className="flex items-center gap-2.5">
+                    <span className="flex-none" style={{ color: accent }}>{icon}</span>
+                    <span className="text-[12.5px] text-text-secondary truncate">{label}</span>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div
+              className="flex items-center justify-end gap-2 px-4 pb-3 pt-1 border-t"
+              style={{ borderColor: 'var(--color-border)' }}
+            >
+              <button
+                onClick={() => { setPendingActions([]); addToast({ type: 'info', message: 'Aktionen abgebrochen.' }) }}
+                className="h-8 px-3.5 rounded-lg border border-border-strong text-[12.5px] font-medium text-text-muted transition-colors hover:bg-surface"
+                style={{ background: 'var(--color-bg)' }}
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={async () => {
+                  const actions = pendingActions
+                  setPendingActions([])
+                  await executeActions(actions)
+                }}
+                className="h-8 px-3.5 rounded-lg text-[12.5px] font-medium text-white transition-opacity hover:opacity-90"
+                style={{ background: 'var(--color-accent)' }}
+              >
+                Alles ausführen
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Input area */}
       <div className="px-6 pb-5 pt-3">
@@ -699,7 +907,7 @@ export default function Chat(): React.JSX.Element {
 
             {/* Input box */}
             <div
-              className="flex items-center gap-2 border border-border-strong rounded-xl shadow-input transition-all duration-200 focus-within:border-accent-focus focus-within:shadow-input-focus"
+              className="flex items-center gap-2 border border-border-strong rounded-xl transition-all duration-200 focus-within:border-accent-soft focus-within:shadow-input-focus"
               style={{ padding: '7px 7px 7px 8px', background: 'var(--color-bg)' }}
             >
               <button
@@ -728,7 +936,7 @@ export default function Chat(): React.JSX.Element {
                 onClick={() => sendMessage(input)}
                 disabled={!input.trim() || isTyping}
                 className="btn-press flex items-center justify-center rounded-btn flex-none transition-all duration-150"
-                style={{ width: 34, height: 34, background: input.trim() && !isTyping ? ACCENT : 'var(--color-border-strong)', color: input.trim() && !isTyping ? '#fff' : 'var(--color-text-hint)' }}
+                style={{ width: 34, height: 34, background: input.trim() && !isTyping ? 'var(--color-accent)' : 'var(--color-border-strong)', color: input.trim() && !isTyping ? '#fff' : 'var(--color-text-hint)' }}
               >
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 19V5.5M6 11l6-6 6 6" />
@@ -737,9 +945,16 @@ export default function Chat(): React.JSX.Element {
             </div>
           </div>
 
-          <div className="text-center text-[11.5px] text-text-hint mt-2.5 select-none">
-            <span className="font-mono border border-border rounded px-1 py-0.5 text-[10.5px]" style={{ background: 'var(--color-surface)' }}>Enter</span>
-            {' '}senden · <span className="font-mono">@</span> für Dateien · Deine Daten verlassen dieses Gerät nicht
+          <div className="text-center text-[11.5px] text-text-hint mt-2.5 select-none flex items-center justify-center gap-2">
+            <span>
+              <span className="font-mono border border-border rounded px-1 py-0.5 text-[10.5px]" style={{ background: 'var(--color-surface)' }}>Enter</span>
+              {' '}senden · <span className="font-mono">@</span> für Dateien
+            </span>
+            {contextFiles.length > 0 && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-semibold" style={{ background: 'var(--color-accent)', color: '#fff', opacity: 0.85 }}>
+                {contextFiles.length} Datei{contextFiles.length !== 1 ? 'en' : ''}
+              </span>
+            )}
           </div>
         </div>
       </div>
