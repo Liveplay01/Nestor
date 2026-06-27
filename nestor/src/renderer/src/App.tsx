@@ -29,13 +29,38 @@ const pageVariants = {
 const pageTransition = { duration: 0.2, ease: [0.4, 0, 0.2, 1] }
 
 export default function App(): React.JSX.Element {
-  const { onboardingComplete, setSettings, activeNav, setActiveNav, settings, openMarkdownFile, showFileTree, showActivityLog, setShowFileTree, clearMessages } = useStore()
+  const { onboardingComplete, setSettings, activeNav, setActiveNav, settings, openMarkdownFile, showFileTree, showActivityLog, setShowFileTree, clearMessages, addToast } = useStore()
   const [showTour, setShowTour] = useState(false)
   const [showPalette, setShowPalette] = useState(false)
 
   useEffect(() => {
     window.nestor.settings.get().then((s) => setSettings(s))
   }, [setSettings])
+
+  useEffect(() => {
+    return window.nestor.update.onInstalled((version) => {
+      addToast({
+        type: 'success',
+        message: `Auf Version ${version} aktualisiert — Update-Logs in den Einstellungen`,
+        duration: 7000
+      })
+    })
+  }, [addToast])
+
+  // Flush in-memory state to localStorage before Windows shuts down.
+  // The main process waits up to 1 s for this before calling app.quit().
+  useEffect(() => {
+    return window.nestor.lifecycle.onBeforeQuit(() => {
+      try {
+        const state = useStore.getState()
+        if (state.messages.length > 0) {
+          localStorage.setItem('nestor_chat_v1', JSON.stringify(state.messages))
+        }
+      } catch {
+        // localStorage write errors are non-fatal during shutdown
+      }
+    })
+  }, [])
 
   useEffect(() => {
     const html = document.documentElement

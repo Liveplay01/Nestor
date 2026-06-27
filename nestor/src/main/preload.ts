@@ -98,5 +98,19 @@ contextBridge.exposeInMainWorld('nestor', {
       ipcRenderer.on('onboarding:error', h)
       return () => ipcRenderer.removeListener('onboarding:error', h)
     }
+  },
+  update: {
+    onInstalled: (cb: (version: string) => void) => {
+      const h = (_: unknown, v: string) => cb(v)
+      ipcRenderer.on('update:installed', h)
+      return () => ipcRenderer.removeListener('update:installed', h)
+    }
+  },
+  lifecycle: {
+    onBeforeQuit: (cb: () => void) => {
+      const h = () => cb()
+      ipcRenderer.on('app:before-quit', h)
+      return () => ipcRenderer.removeListener('app:before-quit', h)
+    }
   }
 })

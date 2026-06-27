@@ -177,3 +177,55 @@ input, button, textarea {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Keyboard focus indicator ──────────────────────────────
+   Only shown when navigating via Tab/keyboard, never on click.
+   Meets WCAG 2.1 Success Criterion 2.4.11 (Focus Appearance). */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Windows High Contrast Mode ────────────────────────────
+   Activated when the user enables a high contrast theme in
+   Windows Settings → Accessibility → Contrast Themes.
+   We remap our CSS variables to the guaranteed OS system
+   colors so every element stays readable. */
+@media (forced-colors: active) {
+  :root {
+    --color-bg:             Canvas;
+    --color-surface:        Canvas;
+    --color-sidebar:        Canvas;
+    --color-border:         ButtonBorder;
+    --color-border-strong:  ButtonBorder;
+    --color-text-primary:   CanvasText;
+    --color-text-secondary: CanvasText;
+    --color-text-muted:     CanvasText;
+    --color-text-faint:     GrayText;
+    --color-text-hint:      GrayText;
+    --color-accent:         Highlight;
+  }
+
+  /* Let the OS control button colors instead of our custom styles */
+  button, [role="button"] {
+    forced-color-adjust: none;
+    background: ButtonFace !important;
+    color: ButtonText !important;
+    border: 1px solid ButtonBorder !important;
+  }
+
+  /* Ensure selected / active states are perceivable */
+  [aria-selected="true"],
+  [aria-current="page"] {
+    forced-color-adjust: none;
+    background: Highlight !important;
+    color: HighlightText !important;
+  }
+
+  /* Drag-over indicator must work without custom color */
+  .drag-over {
+    outline: 3px solid Highlight !important;
+  }
+}

@@ -61,6 +61,12 @@ interface NestorAPI {
     onProgress: (cb: (p: { percent: number; statusText: string; speedText?: string }) => void) => () => void
     onError: (cb: (msg: string) => void) => () => void
   }
+  update: {
+    onInstalled: (cb: (version: string) => void) => () => void
+  }
+  lifecycle: {
+    onBeforeQuit: (cb: () => void) => () => void
+  }
 }
 
 declare global {
