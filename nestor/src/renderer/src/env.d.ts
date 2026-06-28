@@ -23,7 +23,9 @@ interface NestorAPI {
     renameFile: (path: string, newName: string) => Promise<HistoryItem>
     deleteFile: (path: string) => Promise<HistoryItem>
     undo: (id: string) => Promise<void>
-    search: (rootPath: string, query: string) => Promise<FileEntry[]>
+    search: (query: string) => Promise<FileEntry[]>
+    previewDocx: (path: string) => Promise<string>
+    previewXlsx: (path: string) => Promise<Array<{ name: string; rows: (string | number | boolean | null)[][]; totalRows: number }>>
     writeFile: (path: string, content: string) => Promise<void>
     createFile: (path: string) => Promise<HistoryItem>
     onChanged: (cb: (rootPath: string) => void) => () => void
@@ -38,6 +40,10 @@ interface NestorAPI {
     getSpecialFolders: () => Promise<{ desktop: string; downloads: string; documents: string }>
     getStartup: () => Promise<boolean>
     setStartup: (enabled: boolean) => Promise<void>
+    exportData: () => Promise<string>
+    clearData: () => Promise<void>
+    getUninstallInfo: () => Promise<{ nestorFound: boolean; ollamaFound: boolean; isDev: boolean }>
+    uninstall: (opts: { uninstallOllama: boolean }) => Promise<void>
   }
   ollama: {
     check: () => Promise<OllamaStatus>

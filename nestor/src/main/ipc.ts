@@ -1,10 +1,19 @@
-import { ipcMain, BrowserWindow, dialog, shell, app } from 'electron'
+import { ipcMain, BrowserWindow, dialog, shell, app, safeStorage } from 'electron'
 import fs from 'fs'
 import path from 'path'
+import { spawn, execSync } from 'child_process'
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Store = require('electron-store') as typeof import('electron-store').default
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const chokidar = require('chokidar') as typeof import('chokidar')
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const mammoth = require('mammoth') as { convertToHtml: (i: { buffer: Buffer }) => Promise<{ value: string }> }
+type XlsxWorkbook = { SheetNames: string[]; Sheets: Record<string, unknown> }
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const XLSX: {
+  readFile: (p: string) => XlsxWorkbook
+  utils: { sheet_to_json: <T>(sheet: unknown, opts?: { header?: 1; defval?: unknown }) => T[] }
+} = require('xlsx')
 import {
   listDir,
   readFile,
@@ -20,6 +29,7 @@ import {
 import { checkOllama, streamChat, getAvailableModels, testExternalApi } from './ollama'
 import { runOnboarding } from './onboarding'
 import { Settings, HistoryItem } from '../shared/types'
+import log from './logger'
 
 const store = new Store<{ settings: Settings; history: HistoryItem[] }>({
   defaults: {
@@ -54,13 +64,34 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
   ipcMain.handle('window:is-maximized', () => getWin()?.isMaximized() ?? false)
 
   // ── Settings ─────────────────────────────────────────────
-  ipcMain.handle('app:get-settings', () => store.get('settings'))
+  // API keys are stored encrypted via safeStorage (DPAPI on Windows).
+  // The config.json never contains the plaintext key.
+  ipcMain.handle('app:get-settings', () => {
+    const settings = store.get('settings')
+    const encryptedKey = store.get('apiKeyEncrypted') as string | undefined
+    let apiKey = ''
+    if (encryptedKey && safeStorage.isEncryptionAvailable()) {
+      try {
+        apiKey = safeStorage.decryptString(Buffer.from(encryptedKey, 'base64'))
+      } catch {
+        // Decryption failed (e.g. different user/machine) — return empty
+      }
+    }
+    return { ...settings, apiKey }
+  })
   ipcMain.handle('app:set-settings', (_, patch: Partial<Settings>) => {
     const current = store.get('settings')
+    if (patch.apiKey !== undefined) {
+      if (patch.apiKey && safeStorage.isEncryptionAvailable()) {
+        const encrypted = safeStorage.encryptString(patch.apiKey)
+        store.set('apiKeyEncrypted', encrypted.toString('base64'))
+      } else {
+        store.delete('apiKeyEncrypted')
+      }
+      delete patch.apiKey
+    }
     const next = { ...current, ...patch }
     store.set('settings', next)
-
-    // Restart watcher if root folder changed
     if (patch.rootFolder && patch.rootFolder !== current.rootFolder) {
       startWatcher(patch.rootFolder, getWin)
     }
@@ -77,10 +108,14 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
 
   // ── File system ───────────────────────────────────────────
   ipcMain.handle('fs:list-dir', (_, { path }: { path: string }) => {
+    const root = store.get('settings').rootFolder
+    assertWithinRoot(root, path)
     return listDir(path)
   })
 
   ipcMain.handle('fs:read-file', (_, { path }: { path: string }) => {
+    const root = store.get('settings').rootFolder
+    assertWithinRoot(root, path)
     return readFile(path)
   })
 
@@ -139,8 +174,10 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
     getWin()?.webContents.send('history:updated', updated)
   })
 
-  ipcMain.handle('fs:search', (_, { rootPath, query }: { rootPath: string; query: string }) => {
-    return searchFiles(rootPath, query)
+  ipcMain.handle('fs:search', (_, { query }: { query: string }) => {
+    const root = store.get('settings').rootFolder
+    if (!root) return []
+    return searchFiles(root, query)
   })
 
   ipcMain.handle('history:get', () => store.get('history'))
@@ -193,6 +230,17 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
     shell.showItemInFolder(path)
   })
   ipcMain.handle('shell:open-external', (_, { url }: { url: string }) => {
+    const ALLOWED_PROTOCOLS = ['https:', 'http:', 'mailto:']
+    try {
+      const parsed = new URL(url)
+      if (!ALLOWED_PROTOCOLS.includes(parsed.protocol)) {
+        log.warn('[shell:open-external] Blocked protocol:', url)
+        return
+      }
+    } catch {
+      log.warn('[shell:open-external] Invalid URL blocked:', url)
+      return
+    }
     return shell.openExternal(url)
   })
 
@@ -200,12 +248,22 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
   ipcMain.handle('fs:write-file', (_, { path: filePath, content }: { path: string; content: string }) => {
     const root = store.get('settings').rootFolder
     assertWithinRoot(root, filePath)
-    fs.writeFileSync(filePath, content, 'utf-8')
+    try {
+      fs.writeFileSync(filePath, content, 'utf-8')
+    } catch (err) {
+      log.error('[fs:write-file]', err)
+      throw err
+    }
   })
   ipcMain.handle('fs:create-file', (_, { path: filePath }: { path: string }) => {
     const root = store.get('settings').rootFolder
     assertWithinRoot(root, filePath)
-    fs.writeFileSync(filePath, '', 'utf-8')
+    try {
+      fs.writeFileSync(filePath, '', 'utf-8')
+    } catch (err) {
+      log.error('[fs:create-file]', err)
+      throw err
+    }
     const name = path.basename(filePath)
     const item: HistoryItem = {
       id: Math.random().toString(36).slice(2),
@@ -221,6 +279,36 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
     return item
   })
 
+  // ── Document preview ─────────────────────────────────────
+  ipcMain.handle('fs:preview-docx', async (_, { path: filePath }: { path: string }) => {
+    const root = store.get('settings').rootFolder
+    assertWithinRoot(root, filePath)
+    try {
+      const buffer = fs.readFileSync(filePath)
+      const result = await mammoth.convertToHtml({ buffer })
+      return result.value
+    } catch (err) {
+      log.error('[fs:preview-docx]', err)
+      throw err
+    }
+  })
+
+  ipcMain.handle('fs:preview-xlsx', (_, { path: filePath }: { path: string }) => {
+    const root = store.get('settings').rootFolder
+    assertWithinRoot(root, filePath)
+    try {
+      const workbook = XLSX.readFile(filePath)
+      return workbook.SheetNames.map(name => {
+        type Row = (string | number | boolean | null)[]
+        const allRows = XLSX.utils.sheet_to_json<Row>(workbook.Sheets[name], { header: 1, defval: null })
+        return { name, rows: allRows.slice(0, 200), totalRows: allRows.length }
+      })
+    } catch (err) {
+      log.error('[fs:preview-xlsx]', err)
+      throw err
+    }
+  })
+
   // ── App info ──────────────────────────────────────────────
   ipcMain.handle('app:get-version', () => app.getVersion())
   ipcMain.handle('app:get-special-folders', () => ({
@@ -228,6 +316,40 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
     downloads: app.getPath('downloads'),
     documents: app.getPath('documents')
   }))
+
+  // ── DSGVO: Daten-Export & Löschung ───────────────────────
+  ipcMain.handle('app:export-data', () => {
+    const data = { settings: store.get('settings'), history: store.get('history') }
+    return JSON.stringify(data, null, 2)
+  })
+  ipcMain.handle('app:clear-data', () => {
+    store.clear()
+    log.info('User data cleared via app:clear-data')
+  })
+
+  // ── Deinstallation ────────────────────────────────────────
+  ipcMain.handle('app:get-uninstall-info', () => {
+    const exeDir = path.dirname(app.getPath('exe'))
+    const nestorUninstaller = path.join(exeDir, 'Uninstall Nestor.exe')
+    const nestorFound = fs.existsSync(nestorUninstaller)
+    const ollamaUninstaller = findOllamaUninstaller()
+    return { nestorFound, ollamaFound: !!ollamaUninstaller, isDev: !nestorFound }
+  })
+
+  ipcMain.handle('app:uninstall', async (_, { uninstallOllama }: { uninstallOllama: boolean }) => {
+    if (uninstallOllama) {
+      const ollamaPath = findOllamaUninstaller()
+      if (ollamaPath) {
+        spawn(ollamaPath, ['/SILENT'], { detached: true, stdio: 'ignore', shell: false }).unref()
+        await new Promise((r) => setTimeout(r, 800))
+      }
+    }
+    const nestorUninstaller = path.join(path.dirname(app.getPath('exe')), 'Uninstall Nestor.exe')
+    if (fs.existsSync(nestorUninstaller)) {
+      spawn(nestorUninstaller, [], { detached: true, stdio: 'ignore', shell: false }).unref()
+    }
+    app.quit()
+  })
 
   // ── Autostart ─────────────────────────────────────────────
   // Reads/writes HKCU\Software\Microsoft\Windows\CurrentVersion\Run.
@@ -257,7 +379,42 @@ function startWatcher(folderPath: string, getWin: () => BrowserWindow | null): v
   const notify = (): void => {
     getWin()?.webContents.send('fs:changed', folderPath)
   }
-  watcher.on('add', notify).on('unlink', notify).on('addDir', notify).on('unlinkDir', notify)
+  watcher
+    .on('add', notify)
+    .on('unlink', notify)
+    .on('addDir', notify)
+    .on('unlinkDir', notify)
+    .on('error', (err) => log.error('[chokidar]', err))
+}
+
+function findOllamaUninstaller(): string | null {
+  const candidates = [
+    'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Ollama',
+    'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Ollama',
+    'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{Ollama}',
+  ]
+  for (const key of candidates) {
+    try {
+      const out = execSync(`reg query "${key}" /v UninstallString`, {
+        encoding: 'utf-8',
+        timeout: 2000,
+        windowsHide: true
+      })
+      const match = out.match(/UninstallString\s+REG_SZ\s+(.+)/)
+      if (match) {
+        const raw = match[1].trim()
+        const exePath = raw.startsWith('"') ? raw.slice(1, raw.indexOf('"', 1)) : raw.split(/\s/)[0]
+        if (fs.existsSync(exePath)) return exePath
+      }
+    } catch { /* key not found — try next */ }
+  }
+  // Filesystem fallback for common Ollama install locations
+  const localAppData = process.env['LOCALAPPDATA'] ?? ''
+  for (const name of ['unins000.exe', 'Uninstall Ollama.exe']) {
+    const p = path.join(localAppData, 'Programs', 'Ollama', name)
+    if (fs.existsSync(p)) return p
+  }
+  return null
 }
 
 function saveHistory(item: HistoryItem): void {

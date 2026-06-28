@@ -23,6 +23,11 @@ Nein → Alle Daten werden vollständig gelöscht." \
   DeleteRegKey HKCU "Software\nestor"
 
   nestor_keep_data:
+  ; ── Autostart-Eintrag IMMER entfernen (unabhängig von Datenwahl) ─────────────
+  ; Wenn der Nutzer Autostart aktiviert hatte, bleibt sonst ein toter Run-Key
+  ; in der Registry zurück, der beim Windows-Login eine Fehlermeldung erzeugt.
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Nestor"
+
   ; The NSIS-generated uninstall entry (HKLM\...\Uninstall\Nestor_is1)
   ; is always removed by NSIS automatically — no extra step needed.
 !macroend

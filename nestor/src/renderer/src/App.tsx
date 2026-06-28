@@ -11,6 +11,7 @@ import MarkdownEditor from './components/MarkdownEditor'
 import TourOverlay, { TOUR_KEY } from './components/TourOverlay'
 import ToastContainer from './components/Toast'
 import CommandPalette from './components/CommandPalette'
+import HelpButton from './components/HelpButton'
 
 const HomePage = lazy(() => import('./components/HomePage'))
 const Explorer = lazy(() => import('./components/Explorer'))
@@ -107,6 +108,26 @@ export default function App(): React.JSX.Element {
         localStorage.removeItem('nestor_chat_v1')
         setActiveNav('chat')
       }
+      else if ((e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
+        e.preventDefault()
+        const history = useStore.getState().history
+        const latest = history.find(h => !h.undone)
+        if (latest) {
+          window.nestor.fs.undo(latest.id)
+            .then(() => {
+              useStore.getState().markUndone(latest.id)
+              useStore.getState().addToast({
+                type: 'success',
+                message: `Rückgängig: ${latest.verb} – "${latest.target}"`
+              })
+            })
+            .catch(() => {
+              useStore.getState().addToast({ type: 'error', message: 'Aktion konnte nicht rückgängig gemacht werden.' })
+            })
+        } else {
+          useStore.getState().addToast({ type: 'info', message: 'Nichts zum Rückgängigmachen.' })
+        }
+      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -123,6 +144,7 @@ export default function App(): React.JSX.Element {
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: 'var(--color-bg)' }}>
       {showTour && <TourOverlay onClose={closeTour} />}
       <ToastContainer />
+      <HelpButton />
       <CommandPalette open={showPalette} onClose={() => setShowPalette(false)} />
       <TitleBar />
       <div className="flex flex-1 min-h-0 overflow-hidden">

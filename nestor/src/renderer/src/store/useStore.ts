@@ -42,7 +42,7 @@ interface NestorStore {
   setMessages: (msgs: Message[]) => void
   addMessage: (m: Message) => void
   appendToken: (id: string, token: string) => void
-  finalizeMessage: (id: string, text?: string) => void
+  finalizeMessage: (id: string, text?: string, extra?: Partial<Message>) => void
   clearMessages: () => void
   isTyping: boolean
   setTyping: (v: boolean) => void
@@ -114,10 +114,10 @@ export const useStore = create<NestorStore>((set) => ({
         m.id === id ? { ...m, text: m.text + token } : m
       )
     })),
-  finalizeMessage: (id, text) =>
+  finalizeMessage: (id, text, extra) =>
     set((state) => ({
       messages: state.messages.map((m) =>
-        m.id === id ? { ...m, isStreaming: false, ...(text !== undefined ? { text } : {}) } : m
+        m.id === id ? { ...m, isStreaming: false, ...(text !== undefined ? { text } : {}), ...extra } : m
       )
     })),
   clearMessages: () =>

@@ -25,6 +25,7 @@ export interface Message {
   chips?: FileChip[]
   time?: string
   isStreaming?: boolean
+  errorAction?: { label: string; nav: NavSection }
 }
 
 export type HistoryActionType = 'create_folder' | 'create_file' | 'move_file' | 'rename_file' | 'delete_file'

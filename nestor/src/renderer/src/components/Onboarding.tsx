@@ -45,9 +45,10 @@ interface ModeCardProps {
   subtitle: string
   pros: string[]
   cons: string[]
+  recommended?: boolean
 }
 
-function ModeCard({ selected, onClick, icon, title, subtitle, pros, cons }: ModeCardProps): React.JSX.Element {
+function ModeCard({ selected, onClick, icon, title, subtitle, pros, cons, recommended }: ModeCardProps): React.JSX.Element {
   return (
     <button
       onClick={onClick}
@@ -69,6 +70,9 @@ function ModeCard({ selected, onClick, icon, title, subtitle, pros, cons }: Mode
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
             <span className="text-[14px] font-semibold text-text-primary">{title}</span>
+            {recommended && !selected && (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded leading-none" style={{ background: '#DCFCE7', color: '#16A34A' }}>Empfohlen</span>
+            )}
             {selected && (
               <span className="text-[11px] font-medium px-1.5 py-0.5 rounded" style={{ background: `${ACCENT}14`, color: ACCENT }}>Ausgewählt</span>
             )}
@@ -221,6 +225,7 @@ export default function Onboarding(): React.JSX.Element {
                 subtitle="Nestor denkt vollständig auf deinem Gerät"
                 pros={['100 % privat', 'Keine Kosten', 'Funktioniert offline']}
                 cons={['~4 GB Download', 'Mind. 8 GB RAM nötig']}
+                recommended
               />
 
               <ModeCard
@@ -396,6 +401,12 @@ export default function Onboarding(): React.JSX.Element {
               >
                 Weiter
               </button>
+              <p className="mt-5 text-[11.5px] text-center flex items-center justify-center gap-1.5" style={{ color: '#9A9AA2' }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ flexShrink: 0 }}>
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+                Deine Dateien werden niemals verändert oder gelöscht — Nestor liest sie nur.
+              </p>
             </div>
           )}
 
@@ -418,10 +429,25 @@ export default function Onboarding(): React.JSX.Element {
               </div>
               <button
                 onClick={handleFinish}
-                className="h-10 px-6 rounded-lg text-[14px] font-medium text-white transition-opacity hover:opacity-90"
+                className="w-full h-10 rounded-lg text-[14px] font-medium text-white transition-opacity hover:opacity-90"
                 style={{ background: ACCENT }}
               >
                 Nestor öffnen
+              </button>
+              <button
+                onClick={() => {
+                  setOnboardingComplete(true)
+                  setTimeout(() => {
+                    window.dispatchEvent(new CustomEvent('nestor:prefill-chat', {
+                      detail: { message: 'Kannst du mir kurz zeigen was in meinem Ordner ist? Gib mir einen freundlichen Überblick.' }
+                    }))
+                    useStore.getState().setActiveNav('chat')
+                  }, 400)
+                }}
+                className="w-full mt-2 h-10 rounded-lg border text-[13.5px] font-medium transition-colors hover:opacity-80"
+                style={{ borderColor: '#EAEAED', background: '#FBFBFC', color: '#52525B' }}
+              >
+                ✨ Meinen Ordner analysieren lassen
               </button>
             </div>
           )}

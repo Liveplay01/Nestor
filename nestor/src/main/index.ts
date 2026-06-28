@@ -29,7 +29,7 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: true
     }
   })
 
@@ -75,6 +75,13 @@ app.on('window-all-closed', () => {
   }
 })
 
+process.on('uncaughtException', (err) => {
+  log.error('[uncaughtException]', err)
+})
+process.on('unhandledRejection', (reason) => {
+  log.error('[unhandledRejection]', reason)
+})
+
 // WM_QUERYENDSESSION — Windows sends this before shutdown/restart/logoff.
 // We notify the renderer so it can flush any in-memory state, then quit
 // within 1 s so we never block the OS shutdown sequence.
@@ -90,5 +97,5 @@ app.on('before-quit', (event) => {
     win.webContents.send('app:before-quit')
   }
 
-  setTimeout(() => app.quit(), 1000)
+  setTimeout(() => app.quit(), 500)
 })

@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore'
 import { getFileColor } from '../lib/fileColors'
 import { buildSystemPrompt } from '../lib/systemPrompt'
 import { randomId, formatTime } from '../lib/utils'
-import type { Message, HistoryItem, FileEntry } from '@shared/types'
+import type { Message, HistoryItem, FileEntry, NavSection } from '@shared/types'
 import NestorLogo from './NestorLogo'
 import NestorAnimation from './NestorAnimation'
 
@@ -20,20 +20,20 @@ const STATUS_TOOLTIPS: Record<AiStatus, string> = {
   red: 'Nestor ist nicht verbunden. Überprüfe deine KI-Einstellungen (⚙).'
 }
 
-function friendlyError(err: string): string {
+function friendlyError(err: string): { message: string; action?: { label: string; nav: NavSection } } {
   if (err.includes('ECONNREFUSED') || err.includes('11434'))
-    return '⚠️ Nestor ist nicht erreichbar. Öffne die Taskleiste und starte Ollama neu – oder überprüfe deine Einstellungen (⚙).'
+    return { message: '⚠️ Nestor ist nicht erreichbar. Läuft Ollama noch?', action: { label: 'KI-Einstellungen öffnen', nav: 'settings' } }
   if (err.includes('401') || err.toLowerCase().includes('unauthorized') || err.toLowerCase().includes('api key'))
-    return '⚠️ Dein API-Schlüssel ist ungültig oder abgelaufen. Bitte überprüfe ihn in den Einstellungen (⚙).'
+    return { message: '⚠️ Dein API-Schlüssel ist ungültig oder abgelaufen.', action: { label: 'API-Key prüfen', nav: 'settings' } }
   if (err.includes('429') || err.toLowerCase().includes('rate limit'))
-    return '⚠️ Zu viele Anfragen in kurzer Zeit. Bitte warte einen Moment und versuche es erneut.'
+    return { message: '⚠️ Zu viele Anfragen in kurzer Zeit. Bitte warte einen Moment und versuche es erneut.' }
   if (err.toLowerCase().includes('timeout') || err.includes('ETIMEDOUT'))
-    return '⚠️ Nestor hat nicht rechtzeitig geantwortet. Ist deine Internetverbindung aktiv?'
+    return { message: '⚠️ Nestor hat nicht rechtzeitig geantwortet. Ist deine Internetverbindung aktiv?' }
   if (err.includes('ENETUNREACH') || err.includes('ENOTFOUND'))
-    return '⚠️ Keine Verbindung zum Internet. Bitte überprüfe deine Netzwerkverbindung.'
+    return { message: '⚠️ Keine Verbindung zum Internet. Bitte überprüfe deine Netzwerkverbindung.' }
   if (err.includes('403') || err.toLowerCase().includes('forbidden'))
-    return '⚠️ Zugriff verweigert. Bitte überprüfe deine API-Einstellungen (⚙).'
-  return '⚠️ Etwas ist schiefgelaufen. Bitte versuche es erneut oder starte Nestor neu.'
+    return { message: '⚠️ Zugriff verweigert.', action: { label: 'Einstellungen prüfen', nav: 'settings' } }
+  return { message: '⚠️ Etwas ist schiefgelaufen. Bitte versuche es erneut oder starte Nestor neu.' }
 }
 
 const WELCOME_KEY = 'nestor_welcomed_v1'
@@ -93,6 +93,16 @@ const WORKFLOW_CARDS = [
     title: 'Downloads organisieren',
     desc: 'Chaotischen Download-Ordner aufräumen',
     prompt: 'Analysiere meinen Ordner und helfe mir, Downloads sinnvoll zu kategorisieren und zu sortieren'
+  },
+  {
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" />
+      </svg>
+    ),
+    title: 'Zeig mir was du kannst',
+    desc: 'Kurze Einführung in alle Funktionen',
+    prompt: 'Erkläre mir in 3–4 kurzen Punkten was du für mich tun kannst. Sei freundlich und einfach verständlich.'
   }
 ]
 
@@ -177,6 +187,15 @@ const MessageBubble = memo(function MessageBubble({ msg, onAnchor }: { msg: Mess
         <div className="text-[14px] leading-[1.65] text-text-secondary whitespace-pre-wrap">
           {msg.text}
         </div>
+        {msg.errorAction && (
+          <button
+            onClick={() => useStore.getState().setActiveNav(msg.errorAction!.nav)}
+            className="mt-2 text-[12.5px] font-medium transition-colors hover:opacity-70"
+            style={{ color: 'var(--color-accent)' }}
+          >
+            {msg.errorAction.label} →
+          </button>
+        )}
         {msg.chips && msg.chips.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-3">
             {msg.chips.map((c, i) => (
@@ -379,6 +398,19 @@ export default function Chat(): React.JSX.Element {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Pre-fill input from external event (e.g. post-onboarding folder analysis)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const msg = (e as CustomEvent<{ message: string }>).detail?.message
+      if (msg) {
+        setInput(msg)
+        setTimeout(() => inputRef.current?.focus(), 100)
+      }
+    }
+    window.addEventListener('nestor:prefill-chat', handler)
+    return () => window.removeEventListener('nestor:prefill-chat', handler)
+  }, [])
+
   // Persist messages to localStorage whenever they change
   useEffect(() => {
     const completed = messages.filter((m) => !m.isStreaming && m.text)
@@ -497,7 +529,10 @@ export default function Chat(): React.JSX.Element {
       const sid = currentStreamId.val
       if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
       streamingTextRef.current = ''
-      if (sid) finalizeMessage(sid, friendlyError(err))
+      if (sid) {
+        const errObj = friendlyError(err)
+        finalizeMessage(sid, errObj.message, errObj.action ? { errorAction: errObj.action } : undefined)
+      }
       setTyping(false); setStreamingId(null); currentStreamId.val = ''
     })
 

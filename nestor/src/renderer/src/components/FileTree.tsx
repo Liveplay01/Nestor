@@ -151,7 +151,7 @@ export default function FileTree(): React.JSX.Element {
     setIsSearching(true)
     const t = setTimeout(async () => {
       try {
-        const results = await window.nestor.fs.search(settings.rootFolder, search)
+        const results = await window.nestor.fs.search(search)
         setSearchResults(results)
       } finally {
         setIsSearching(false)

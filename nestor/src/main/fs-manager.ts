@@ -3,6 +3,7 @@ import * as path from 'path'
 import { shell } from 'electron'
 import { FileEntry, FileType, HistoryItem } from '../shared/types'
 import { randomUUID } from 'crypto'
+import log from './logger'
 
 export function getFileType(filePath: string): FileType {
   const ext = path.extname(filePath).toLowerCase().slice(1)
@@ -64,10 +65,12 @@ export function listDir(dirPath: string, depth = 0, maxDepth = 3): FileEntry[] {
 export function readFile(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase()
   const textExts = ['.txt', '.md', '.rtf', '.csv', '.json', '.js', '.ts', '.html', '.css']
-  if (textExts.includes(ext)) {
+  if (!textExts.includes(ext)) return `[Binary file: ${path.basename(filePath)}]`
+  try {
     return fs.readFileSync(filePath, 'utf-8')
+  } catch (err) {
+    return `[Fehler beim Lesen: ${(err as Error).message}]`
   }
-  return `[Binary file: ${path.basename(filePath)}]`
 }
 
 export function createFolder(folderPath: string): HistoryItem {
@@ -85,7 +88,9 @@ export function createFolder(folderPath: string): HistoryItem {
 }
 
 export function assertWithinRoot(rootPath: string, targetPath: string): void {
-  if (!rootPath) return
+  if (!rootPath) {
+    throw new Error('No root folder configured. Select a folder first.')
+  }
   const root = path.resolve(rootPath)
   const target = path.resolve(targetPath)
   if (target !== root && !target.startsWith(root + path.sep)) {
@@ -111,7 +116,16 @@ export function copyFile(from: string, to: string): HistoryItem {
 }
 
 export function moveFile(from: string, to: string): HistoryItem {
-  fs.renameSync(from, to)
+  try {
+    fs.renameSync(from, to)
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === 'EXDEV') {
+      fs.copyFileSync(from, to)
+      fs.unlinkSync(from)
+    } else {
+      throw err
+    }
+  }
   const fromName = path.basename(from)
   const toDir = path.basename(path.dirname(to))
   return {
@@ -160,28 +174,33 @@ export async function deleteFile(filePath: string): Promise<HistoryItem> {
 }
 
 export function undoAction(item: HistoryItem): void {
-  switch (item.type) {
-    case 'move_file':
-    case 'rename_file':
-      if (item.from && item.to) fs.renameSync(item.to, item.from)
-      break
-    case 'create_folder':
-      if (item.path && fs.existsSync(item.path)) {
-        const entries = fs.readdirSync(item.path)
-        if (entries.length === 0) fs.rmdirSync(item.path)
-      }
-      break
-    case 'create_file':
-      if (item.path && fs.existsSync(item.path)) {
-        fs.unlinkSync(item.path)
-      }
-      break
-    case 'delete_file':
-      if (item.path && item.snapshotBase64) {
-        const buf = Buffer.from(item.snapshotBase64, 'base64')
-        fs.writeFileSync(item.path, buf)
-      }
-      break
+  try {
+    switch (item.type) {
+      case 'move_file':
+      case 'rename_file':
+        if (item.from && item.to) fs.renameSync(item.to, item.from)
+        break
+      case 'create_folder':
+        if (item.path && fs.existsSync(item.path)) {
+          const entries = fs.readdirSync(item.path)
+          if (entries.length === 0) fs.rmdirSync(item.path)
+        }
+        break
+      case 'create_file':
+        if (item.path && fs.existsSync(item.path)) {
+          fs.unlinkSync(item.path)
+        }
+        break
+      case 'delete_file':
+        if (item.path && item.snapshotBase64) {
+          const buf = Buffer.from(item.snapshotBase64, 'base64')
+          fs.writeFileSync(item.path, buf)
+        }
+        break
+    }
+  } catch (err) {
+    log.error('[undoAction]', err)
+    throw err
   }
 }
 

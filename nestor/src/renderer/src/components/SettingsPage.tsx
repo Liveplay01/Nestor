@@ -60,10 +60,15 @@ export default function SettingsPage(): React.JSX.Element {
   const [apiStatusMsg, setApiStatusMsg] = useState('')
   const [models, setModels] = useState<string[]>([])
   const [launchAtStartup, setLaunchAtStartup] = useState(false)
+  const [clearConfirm, setClearConfirm] = useState(false)
+  const [uninstallInfo, setUninstallInfo] = useState<{ nestorFound: boolean; ollamaFound: boolean; isDev: boolean } | null>(null)
+  const [uninstallOllama, setUninstallOllama] = useState(false)
+  const [uninstallConfirm, setUninstallConfirm] = useState(false)
 
   useEffect(() => {
     window.nestor.app.getVersion().then(setVersion).catch(() => {})
     window.nestor.app.getStartup().then(setLaunchAtStartup).catch(() => {})
+    window.nestor.app.getUninstallInfo().then(setUninstallInfo).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -106,6 +111,27 @@ export default function SettingsPage(): React.JSX.Element {
     if (folder) save({ rootFolder: folder })
   }
 
+  const exportData = async () => {
+    const json = await window.nestor.app.exportData()
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `nestor-export-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const clearData = async () => {
+    await window.nestor.app.clearData()
+    setClearConfirm(false)
+    window.location.reload()
+  }
+
+  const runUninstall = async () => {
+    await window.nestor.app.uninstall({ uninstallOllama })
+  }
+
   const folderName = settings?.rootFolder
     ? settings.rootFolder.split(/[/\\]/).pop()
     : 'Nicht ausgewählt'
@@ -126,7 +152,7 @@ export default function SettingsPage(): React.JSX.Element {
                 <button
                   key={mode ?? 'none'}
                   onClick={() => save({ aiMode: mode })}
-                  className="h-7 px-3.5 rounded-md text-[12.5px] font-medium transition-all duration-150"
+                  className="h-7 px-3.5 rounded-md text-[12.5px] font-medium transition-all duration-150 flex items-center gap-1.5"
                   style={
                     settings.aiMode === mode
                       ? { background: '#2563EB', color: '#fff' }
@@ -134,6 +160,17 @@ export default function SettingsPage(): React.JSX.Element {
                   }
                 >
                   {mode === 'local' ? 'Lokal (Ollama)' : 'Externe API'}
+                  {mode === 'local' && (
+                    <span
+                      className="text-[9.5px] font-semibold px-1.5 py-0.5 rounded leading-none"
+                      style={{
+                        background: settings.aiMode === 'local' ? 'rgba(255,255,255,0.25)' : '#DCFCE7',
+                        color: settings.aiMode === 'local' ? '#fff' : '#16A34A'
+                      }}
+                    >
+                      Empfohlen
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -329,10 +366,128 @@ export default function SettingsPage(): React.JSX.Element {
           </Row>
         </Section>
 
+        {/* Uninstall */}
+        {uninstallInfo && (
+          <Section title="Deinstallieren">
+            {uninstallInfo.isDev ? (
+              <Row label="Deinstallieren" hint="Nur in einer installierten Version verfügbar">
+                <span className="text-[12px] text-text-faint">Dev-Modus</span>
+              </Row>
+            ) : (
+              <>
+                {uninstallInfo.ollamaFound && (
+                  <Row
+                    label="Ollama mitentfernen"
+                    hint="Ollama wurde von Nestor installiert und kann zusammen deinstalliert werden"
+                  >
+                    <Toggle value={uninstallOllama} onChange={setUninstallOllama} />
+                  </Row>
+                )}
+                <Row
+                  label="Nestor deinstallieren"
+                  hint={
+                    uninstallConfirm
+                      ? 'Die App wird beendet und der Windows-Installer geöffnet.'
+                      : 'Entfernt Nestor vollständig von diesem Computer'
+                  }
+                >
+                  {uninstallConfirm ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={runUninstall}
+                        className="h-8 px-4 rounded-lg text-[12.5px] font-medium text-white"
+                        style={{ background: '#DC2626' }}
+                      >
+                        Ja, deinstallieren
+                      </button>
+                      <button
+                        onClick={() => setUninstallConfirm(false)}
+                        className="h-8 px-3 rounded-lg border border-border-strong text-[12.5px] text-text-muted"
+                        style={{ background: 'var(--color-bg)' }}
+                      >
+                        Abbrechen
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setUninstallConfirm(true)}
+                      className="h-8 px-4 rounded-lg border border-border-strong text-[12.5px] font-medium transition-colors hover:bg-surface"
+                      style={{ background: 'var(--color-bg)', color: '#DC2626' }}
+                    >
+                      Deinstallieren
+                    </button>
+                  )}
+                </Row>
+              </>
+            )}
+          </Section>
+        )}
+
+        {/* Privacy / DSGVO */}
+        <Section title="Datenschutz">
+          <Row label="Daten exportieren" hint="Alle Einstellungen und Aktivitäten als JSON-Datei herunterladen">
+            <button
+              onClick={exportData}
+              className="h-8 px-4 rounded-lg border border-border-strong text-[12.5px] font-medium text-text-muted transition-colors hover:bg-surface"
+              style={{ background: 'var(--color-bg)' }}
+            >
+              Exportieren
+            </button>
+          </Row>
+          <Row
+            label="Alle Daten löschen"
+            hint="Einstellungen, Verlauf und API-Schlüssel werden vollständig entfernt"
+          >
+            {clearConfirm ? (
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] text-text-faint">Wirklich löschen?</span>
+                <button
+                  onClick={clearData}
+                  className="h-8 px-3 rounded-lg text-[12.5px] font-medium text-white"
+                  style={{ background: '#DC2626' }}
+                >
+                  Ja, löschen
+                </button>
+                <button
+                  onClick={() => setClearConfirm(false)}
+                  className="h-8 px-3 rounded-lg border border-border-strong text-[12.5px] text-text-muted"
+                  style={{ background: 'var(--color-bg)' }}
+                >
+                  Abbrechen
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setClearConfirm(true)}
+                className="h-8 px-4 rounded-lg border border-border-strong text-[12.5px] font-medium transition-colors hover:bg-surface"
+                style={{ background: 'var(--color-bg)', color: '#DC2626' }}
+              >
+                Daten löschen
+              </button>
+            )}
+          </Row>
+        </Section>
+
         {/* About */}
         <Section title="Über Nestor">
           <Row label="Version" hint="Nestor Desktop">
             <span className="text-[12.5px] text-text-faint">{version || '—'}</span>
+          </Row>
+          <Row label="Rechtliches">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => window.nestor.shell.openExternal('https://nestor.app/impressum')}
+                className="text-[12.5px] text-text-muted underline underline-offset-2"
+              >
+                Impressum
+              </button>
+              <button
+                onClick={() => window.nestor.shell.openExternal('https://nestor.app/datenschutz')}
+                className="text-[12.5px] text-text-muted underline underline-offset-2"
+              >
+                Datenschutz
+              </button>
+            </div>
           </Row>
         </Section>
 

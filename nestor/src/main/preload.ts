@@ -23,8 +23,9 @@ contextBridge.exposeInMainWorld('nestor', {
       ipcRenderer.invoke('fs:rename-file', { path, newName }),
     deleteFile: (path: string) => ipcRenderer.invoke('fs:delete-file', { path }),
     undo: (id: string) => ipcRenderer.invoke('fs:undo', { id }),
-    search: (rootPath: string, query: string) =>
-      ipcRenderer.invoke('fs:search', { rootPath, query }),
+    search: (query: string) => ipcRenderer.invoke('fs:search', { query }),
+    previewDocx: (path: string) => ipcRenderer.invoke('fs:preview-docx', { path }),
+    previewXlsx: (path: string) => ipcRenderer.invoke('fs:preview-xlsx', { path }),
     writeFile: (path: string, content: string) =>
       ipcRenderer.invoke('fs:write-file', { path, content }),
     createFile: (path: string) => ipcRenderer.invoke('fs:create-file', { path }),
@@ -44,7 +45,13 @@ contextBridge.exposeInMainWorld('nestor', {
     getSpecialFolders: (): Promise<{ desktop: string; downloads: string; documents: string }> =>
       ipcRenderer.invoke('app:get-special-folders'),
     getStartup: (): Promise<boolean> => ipcRenderer.invoke('app:get-startup'),
-    setStartup: (enabled: boolean): Promise<void> => ipcRenderer.invoke('app:set-startup', enabled)
+    setStartup: (enabled: boolean): Promise<void> => ipcRenderer.invoke('app:set-startup', enabled),
+    exportData: (): Promise<string> => ipcRenderer.invoke('app:export-data'),
+    clearData: (): Promise<void> => ipcRenderer.invoke('app:clear-data'),
+    getUninstallInfo: (): Promise<{ nestorFound: boolean; ollamaFound: boolean; isDev: boolean }> =>
+      ipcRenderer.invoke('app:get-uninstall-info'),
+    uninstall: (opts: { uninstallOllama: boolean }): Promise<void> =>
+      ipcRenderer.invoke('app:uninstall', opts)
   },
   ollama: {
     check: () => ipcRenderer.invoke('ollama:check'),

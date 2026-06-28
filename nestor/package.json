@@ -19,7 +19,8 @@
         "electron-store": "^8.2.0",
         "electron-updater": "^6.3.9",
         "mammoth": "^1.8.0",
-        "ollama": "^0.5.16"
+        "ollama": "^0.5.16",
+        "xlsx": "^0.18.5"
     },
     "devDependencies": {
         "@electron-toolkit/tsconfig": "^2.0.0",
