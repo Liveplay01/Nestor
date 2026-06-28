@@ -398,7 +398,8 @@ function findOllamaUninstaller(): string | null {
       const out = execSync(`reg query "${key}" /v UninstallString`, {
         encoding: 'utf-8',
         timeout: 2000,
-        windowsHide: true
+        windowsHide: true,
+        stdio: ['pipe', 'pipe', 'pipe']
       })
       const match = out.match(/UninstallString\s+REG_SZ\s+(.+)/)
       if (match) {
