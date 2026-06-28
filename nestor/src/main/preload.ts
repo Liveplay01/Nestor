@@ -42,7 +42,9 @@ contextBridge.exposeInMainWorld('nestor', {
   app: {
     getVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version'),
     getSpecialFolders: (): Promise<{ desktop: string; downloads: string; documents: string }> =>
-      ipcRenderer.invoke('app:get-special-folders')
+      ipcRenderer.invoke('app:get-special-folders'),
+    getStartup: (): Promise<boolean> => ipcRenderer.invoke('app:get-startup'),
+    setStartup: (enabled: boolean): Promise<void> => ipcRenderer.invoke('app:set-startup', enabled)
   },
   ollama: {
     check: () => ipcRenderer.invoke('ollama:check'),

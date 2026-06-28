@@ -59,9 +59,11 @@ export default function SettingsPage(): React.JSX.Element {
   const [apiStatus, setApiStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle')
   const [apiStatusMsg, setApiStatusMsg] = useState('')
   const [models, setModels] = useState<string[]>([])
+  const [launchAtStartup, setLaunchAtStartup] = useState(false)
 
   useEffect(() => {
     window.nestor.app.getVersion().then(setVersion).catch(() => {})
+    window.nestor.app.getStartup().then(setLaunchAtStartup).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -294,6 +296,22 @@ export default function SettingsPage(): React.JSX.Element {
             <Toggle
               value={settings.notifications ?? true}
               onChange={(v) => save({ notifications: v })}
+            />
+          </Row>
+        </Section>
+
+        {/* System */}
+        <Section title="System">
+          <Row
+            label="Beim Windows-Start öffnen"
+            hint="Nestor startet automatisch, wenn du dich bei Windows anmeldest. Die Einstellung ist auch im Task-Manager unter dem Tab „Autostart" sichtbar."
+          >
+            <Toggle
+              value={launchAtStartup}
+              onChange={(v) => {
+                setLaunchAtStartup(v)
+                window.nestor.app.setStartup(v)
+              }}
             />
           </Row>
         </Section>

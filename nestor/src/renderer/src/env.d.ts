@@ -36,6 +36,8 @@ interface NestorAPI {
   app: {
     getVersion: () => Promise<string>
     getSpecialFolders: () => Promise<{ desktop: string; downloads: string; documents: string }>
+    getStartup: () => Promise<boolean>
+    setStartup: (enabled: boolean) => Promise<void>
   }
   ollama: {
     check: () => Promise<OllamaStatus>

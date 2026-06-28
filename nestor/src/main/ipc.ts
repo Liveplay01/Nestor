@@ -229,6 +229,17 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
     documents: app.getPath('documents')
   }))
 
+  // ── Autostart ─────────────────────────────────────────────
+  // Reads/writes HKCU\Software\Microsoft\Windows\CurrentVersion\Run.
+  // The entry shows up in Task Manager → Startup and Windows Settings → Apps → Startup.
+  ipcMain.handle('app:get-startup', () => {
+    const { openAtLogin } = app.getLoginItemSettings({ name: 'Nestor' })
+    return openAtLogin
+  })
+  ipcMain.handle('app:set-startup', (_, enabled: boolean) => {
+    app.setLoginItemSettings({ openAtLogin: enabled, name: 'Nestor' })
+  })
+
   // ── Startup: init watcher if folder already set ───────────
   const settings = store.get('settings')
   if (settings.rootFolder) {
