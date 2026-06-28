@@ -11,7 +11,8 @@ import MarkdownEditor from './components/MarkdownEditor'
 import TourOverlay, { TOUR_KEY } from './components/TourOverlay'
 import ToastContainer from './components/Toast'
 import CommandPalette from './components/CommandPalette'
-import HelpButton from './components/HelpButton'
+import { HelpModal } from './components/HelpButton'
+import ErrorBoundary from './components/ErrorBoundary'
 
 const HomePage = lazy(() => import('./components/HomePage'))
 const Explorer = lazy(() => import('./components/Explorer'))
@@ -33,6 +34,7 @@ export default function App(): React.JSX.Element {
   const { onboardingComplete, setSettings, activeNav, setActiveNav, settings, openMarkdownFile, showFileTree, showActivityLog, setShowFileTree, clearMessages, addToast } = useStore()
   const [showTour, setShowTour] = useState(false)
   const [showPalette, setShowPalette] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
 
   useEffect(() => {
     window.nestor.settings.get().then((s) => setSettings(s))
@@ -138,17 +140,18 @@ export default function App(): React.JSX.Element {
     setShowTour(false)
   }
 
-  if (!onboardingComplete) return <Onboarding />
+  if (!onboardingComplete) return <ErrorBoundary><Onboarding /></ErrorBoundary>
 
   return (
+    <ErrorBoundary>
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: 'var(--color-bg)' }}>
       {showTour && <TourOverlay onClose={closeTour} />}
       <ToastContainer />
-      <HelpButton />
+      <HelpModal open={showHelp} onClose={() => setShowHelp(false)} />
       <CommandPalette open={showPalette} onClose={() => setShowPalette(false)} />
       <TitleBar />
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        <Sidebar />
+        <Sidebar onHelpClick={() => setShowHelp(true)} />
 
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
@@ -211,5 +214,6 @@ export default function App(): React.JSX.Element {
         </AnimatePresence>
       </div>
     </div>
+    </ErrorBoundary>
   )
 }

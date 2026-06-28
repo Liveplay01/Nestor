@@ -37,6 +37,17 @@ const ICONS: NavItem[] = [
         <path d="M4 5.5h16a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H9.5L5 19v-3.5H4a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z" />
       </svg>
     )
+  },
+  {
+    id: 'help',
+    label: 'Hilfe & FAQ',
+    icon: (
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+        <path d="M12 17h.01" />
+      </svg>
+    )
   }
 ]
 
@@ -47,7 +58,7 @@ const BOTTOM_ICONS: NavItem[] = [
     icon: (
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="3" />
-        <path d="M12 2.5v2.5M12 19v2.5M21.5 12H19M5 12H2.5M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8M18.5 18.5l-1.8-1.8M7.3 7.3L5.5 5.5" />
+        <path d="M12 9V6M12 15V18M9 12H6M15 12H18M9.5 9.5l-1.5-1.5M14.5 9.5l1.5-1.5M9.5 14.5l-1.5 1.5M14.5 14.5l1.5 1.5" />
       </svg>
     )
   }
@@ -57,10 +68,11 @@ const SHORT_LABELS: Record<string, string> = {
   home: 'Home',
   files: 'Dateien',
   chat: 'Chat',
+  help: 'Hilfe',
   settings: 'Einst.'
 }
 
-function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }): React.JSX.Element {
+function NavButton({ item, active, onClick }: { item: NavItem & { action?: () => void }; active: boolean; onClick: () => void }): React.JSX.Element {
   const [hovered, setHovered] = useState(false)
   const shortLabel = SHORT_LABELS[item.id] ?? item.label
 
@@ -70,7 +82,7 @@ function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; 
         onClick={onClick}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        className="no-select relative flex flex-col items-center justify-center gap-[3px] rounded-btn btn-press"
+        className="no-select relative flex flex-col items-center justify-center gap-[3px] rounded-btn btn-press btn-ghost"
         style={{ width: 48, height: 44 }}
       >
         {active && (
@@ -122,8 +134,16 @@ function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; 
   )
 }
 
-export default function Sidebar(): React.JSX.Element {
+export default function Sidebar({ onHelpClick }: { onHelpClick?: () => void }): React.JSX.Element {
   const { activeNav, setActiveNav } = useStore()
+
+  const handleClick = (id: NavSection) => {
+    if (id === 'help' && onHelpClick) {
+      onHelpClick()
+      return
+    }
+    setActiveNav(id)
+  }
 
   return (
     <div
@@ -135,7 +155,7 @@ export default function Sidebar(): React.JSX.Element {
           key={item.id}
           item={item}
           active={activeNav === item.id}
-          onClick={() => setActiveNav(item.id)}
+          onClick={() => handleClick(item.id)}
         />
       ))}
 

@@ -1,8 +1,15 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useStore } from '../store/useStore'
 import NestorLogo from './NestorLogo'
 import type { NavSection } from '@shared/types'
+
+function getGreeting(): string {
+  const h = new Date().getHours()
+  if (h < 11) return 'Guten Morgen'
+  if (h < 17) return 'Guten Tag'
+  return 'Guten Abend'
+}
 
 const ACCENT = 'var(--color-accent)'
 
@@ -121,6 +128,7 @@ function RecentActivity(): React.JSX.Element {
 
 export default function HomePage(): React.JSX.Element {
   const { setActiveNav } = useStore()
+  const greeting = useMemo(() => getGreeting(), [])
 
   const goToChat = (prompt?: string): void => {
     if (prompt) sessionStorage.setItem('nestor_prefill_prompt', prompt)
@@ -140,7 +148,7 @@ export default function HomePage(): React.JSX.Element {
         >
           <NestorLogo size={36} />
           <div>
-            <h1 className="text-[22px] font-semibold text-text-primary tracking-tight">Guten Tag</h1>
+            <h1 className="text-[22px] font-semibold text-text-primary tracking-tight">{greeting}</h1>
             <p className="text-[13.5px] text-text-faint mt-0.5">Was möchtest du heute organisieren?</p>
           </div>
         </motion.div>

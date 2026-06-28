@@ -42,7 +42,7 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
     <button
       onClick={() => onChange(!value)}
       className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200"
-      style={{ background: value ? '#2563EB' : 'var(--color-border-strong)' }}
+      style={{ background: value ? 'var(--color-accent)' : 'var(--color-border-strong)' }}
     >
       <span
         className="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transform transition-transform duration-200"
@@ -152,7 +152,7 @@ export default function SettingsPage(): React.JSX.Element {
                 <button
                   key={mode ?? 'none'}
                   onClick={() => save({ aiMode: mode })}
-                  className="h-7 px-3.5 rounded-md text-[12.5px] font-medium transition-all duration-150 flex items-center gap-1.5"
+                  className="h-7 px-3.5 rounded-md text-[12.5px] font-medium transition-all duration-150 flex items-center gap-1.5 btn-ghost"
                   style={
                     settings.aiMode === mode
                       ? { background: '#2563EB', color: '#fff' }
@@ -274,7 +274,7 @@ export default function SettingsPage(): React.JSX.Element {
                     save({ theme: t })
                     document.documentElement.setAttribute('data-theme', t)
                   }}
-                  className="h-7 px-3.5 rounded-md text-[12.5px] font-medium transition-all duration-150"
+                  className="h-7 px-3.5 rounded-md text-[12.5px] font-medium transition-all duration-150 btn-ghost"
                   style={
                     settings.theme === t
                       ? { background: '#2563EB', color: '#fff' }

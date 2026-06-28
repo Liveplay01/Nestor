@@ -43,7 +43,7 @@ export default function TitleBar(): React.JSX.Element {
       <div className="flex items-center gap-0.5 no-drag">
         <button
           onClick={minimize}
-          className="flex items-center justify-center text-text-faint transition-all duration-150 hover:bg-black/[0.06] rounded-[7px]"
+          className="flex items-center justify-center text-text-faint transition-all duration-150 rounded-[7px] btn-ghost"
           style={{ width: 30, height: 30 }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
@@ -52,7 +52,7 @@ export default function TitleBar(): React.JSX.Element {
         </button>
         <button
           onClick={maximize}
-          className="flex items-center justify-center text-text-faint transition-all duration-150 hover:bg-black/[0.06] rounded-[7px]"
+          className="flex items-center justify-center text-text-faint transition-all duration-150 rounded-[7px] btn-ghost"
           style={{ width: 30, height: 30 }}
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round">
@@ -61,7 +61,7 @@ export default function TitleBar(): React.JSX.Element {
         </button>
         <button
           onClick={close}
-          className="flex items-center justify-center text-text-faint transition-all duration-150 hover:bg-red-500 hover:text-white rounded-[7px]"
+          className="flex items-center justify-center text-text-faint transition-all duration-150 rounded-[7px] btn-ghost hover:text-red-500 hover:bg-red-500/10"
           style={{ width: 30, height: 30 }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">

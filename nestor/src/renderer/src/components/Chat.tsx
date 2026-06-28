@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useStore } from '../store/useStore'
 import { getFileColor } from '../lib/fileColors'
 import { buildSystemPrompt } from '../lib/systemPrompt'
@@ -11,13 +13,13 @@ import NestorAnimation from './NestorAnimation'
 type AiStatus = 'green' | 'yellow' | 'red'
 type ContextFile = { name: string; path: string; color: string }
 
-const STATUS_COLORS: Record<AiStatus, string> = { green: '#16A34A', yellow: '#CA8A04', red: '#DC2626' }
-const STATUS_GLOW: Record<AiStatus, string> = { green: '#16A34A24', yellow: '#CA8A0424', red: '#DC262624' }
-const STATUS_LABELS: Record<AiStatus, string> = { green: 'Läuft lokal', yellow: 'Online API', red: 'Nicht verbunden' }
+const STATUS_COLORS: Record<AiStatus, string> = { green: '#16A34A', yellow: '#CA8A04', red: 'var(--color-text-hint)' }
+const STATUS_GLOW: Record<AiStatus, string> = { green: '#16A34A24', yellow: '#CA8A0424', red: 'transparent' }
+const STATUS_LABELS: Record<AiStatus, string> = { green: 'Läuft lokal', yellow: 'Online API', red: 'Nicht aktiv' }
 const STATUS_TOOLTIPS: Record<AiStatus, string> = {
   green: 'Nestor läuft lokal auf deinem PC – deine Dateien verlassen dieses Gerät nicht.',
   yellow: 'Nestor verwendet eine externe KI (API) – Texte werden zur Verarbeitung an den Anbieter gesendet.',
-  red: 'Nestor ist nicht verbunden. Überprüfe deine KI-Einstellungen (⚙).'
+  red: 'Keine KI verbunden. Klicke auf ⚙ Einstellungen um Ollama einzurichten oder einen API-Key einzutragen.'
 }
 
 function friendlyError(err: string): { message: string; action?: { label: string; nav: NavSection } } {
@@ -140,6 +142,44 @@ function FileChipIcon({ color }: { color: string }): React.JSX.Element {
   )
 }
 
+// Markdown component overrides — styled to match the design system
+const mdComponents: React.ComponentProps<typeof ReactMarkdown>['components'] = {
+  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+  strong: ({ children }) => <strong className="font-semibold text-text-primary">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  ul: ({ children }) => <ul className="mb-2 pl-4 space-y-0.5 list-disc">{children}</ul>,
+  ol: ({ children }) => <ol className="mb-2 pl-4 space-y-0.5 list-decimal">{children}</ol>,
+  li: ({ children }) => <li className="leading-[1.65]">{children}</li>,
+  code: ({ children, className }) => {
+    const isBlock = className?.includes('language-')
+    if (isBlock) return (
+      <pre className="my-2 px-3 py-2.5 rounded-lg text-[12.5px] overflow-x-auto" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+        <code>{children}</code>
+      </pre>
+    )
+    return <code className="px-1.5 py-0.5 rounded text-[12.5px] font-mono" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>{children}</code>
+  },
+  pre: ({ children }) => <>{children}</>,
+  h1: ({ children }) => <h1 className="text-[15px] font-semibold text-text-primary mb-1 mt-2">{children}</h1>,
+  h2: ({ children }) => <h2 className="text-[14px] font-semibold text-text-primary mb-1 mt-2">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-[13.5px] font-semibold text-text-primary mb-1 mt-1.5">{children}</h3>,
+  a: ({ href, children }) => (
+    <button
+      onClick={() => href && window.nestor.shell.openExternal(href)}
+      className="underline transition-opacity hover:opacity-70"
+      style={{ color: 'var(--color-accent)' }}
+    >
+      {children}
+    </button>
+  ),
+  hr: () => <hr className="my-3 border-border" />,
+  blockquote: ({ children }) => (
+    <blockquote className="pl-3 my-2 border-l-2 text-text-faint" style={{ borderColor: 'var(--color-border-strong)' }}>
+      {children}
+    </blockquote>
+  ),
+}
+
 // Memoized — only re-renders when this specific message changes
 const MessageBubble = memo(function MessageBubble({ msg, onAnchor }: { msg: Message; onAnchor: (m: Message) => void }): React.JSX.Element {
   if (msg.role === 'user') {
@@ -184,8 +224,10 @@ const MessageBubble = memo(function MessageBubble({ msg, onAnchor }: { msg: Mess
             </svg>
           </button>
         </div>
-        <div className="text-[14px] leading-[1.65] text-text-secondary whitespace-pre-wrap">
-          {msg.text}
+        <div className="text-[14px] leading-[1.65] text-text-secondary">
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+            {msg.text}
+          </ReactMarkdown>
         </div>
         {msg.errorAction && (
           <button
@@ -523,6 +565,11 @@ export default function Chat(): React.JSX.Element {
       setTyping(false)
       setStreamingId(null)
       currentStreamId.val = ''
+      // Persist after each complete AI response so a crash doesn't erase the conversation
+      try {
+        const msgs = useStore.getState().messages
+        if (msgs.length > 0) localStorage.setItem('nestor_chat_v1', JSON.stringify(msgs))
+      } catch { /* non-fatal */ }
     })
 
     const unError = window.nestor.ollama.onError((err) => {
@@ -694,8 +741,8 @@ export default function Chat(): React.JSX.Element {
           {/* AI Status — pulses when typing */}
           <div
             title={STATUS_TOOLTIPS[aiStatus]}
-            className="flex items-center gap-[7px] h-[29px] px-[11px] border border-border-strong rounded-full cursor-help"
-            style={{ background: 'var(--color-bg)' }}
+          className="flex items-center gap-[7px] h-[29px] px-[11px] border border-border-strong rounded-full cursor-help btn-ghost"
+          style={{ background: 'var(--color-bg)' }}
           >
             <span className="relative flex items-center justify-center w-1.5 h-1.5 flex-none">
               <span

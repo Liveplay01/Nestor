@@ -23,27 +23,44 @@ const FAQ = [
   }
 ]
 
-export default function HelpButton(): React.JSX.Element {
-  const [open, setOpen] = useState(false)
+export function HelpIcon({ onClick }: { onClick: () => void }): React.JSX.Element {
+  return (
+    <button
+      onClick={onClick}
+      className="no-select relative flex flex-col items-center justify-center gap-[3px] rounded-btn btn-press"
+      style={{ width: 48, height: 44 }}
+      title="Hilfe & FAQ"
+    >
+      <span
+        className="relative z-10 transition-colors duration-150"
+        style={{ color: 'var(--color-text-faint)' }}
+      >
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+          <path d="M12 17h.01" />
+        </svg>
+      </span>
+      <span
+        className="relative z-10 text-[9.5px] font-medium leading-none transition-colors duration-150"
+        style={{ color: 'var(--color-text-hint)' }}
+      >
+        FAQ
+      </span>
+    </button>
+  )
+}
+
+export function HelpModal({ open, onClose }: { open: boolean; onClose: () => void }): React.JSX.Element {
   const [openIdx, setOpenIdx] = useState<number | null>(null)
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="fixed bottom-5 right-5 z-40 w-10 h-10 rounded-full text-white shadow-lg flex items-center justify-center text-[17px] font-bold no-drag hover:scale-105 active:scale-95 transition-transform"
-        style={{ background: 'var(--color-accent)' }}
-        aria-label="Hilfe öffnen"
-        title="Hilfe & FAQ"
-      >
-        ?
-      </button>
-
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/30 backdrop-blur-sm"
-            onClick={() => setOpen(false)}
+            onClick={onClose}
           />
           <div
             className="relative rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6"
@@ -85,7 +102,7 @@ export default function HelpButton(): React.JSX.Element {
             <div className="mt-5 flex gap-2">
               <button
                 onClick={() => {
-                  setOpen(false)
+                  onClose()
                   window.dispatchEvent(new Event('nestor:start-tour'))
                 }}
                 className="flex-1 text-[13px] py-2.5 rounded-xl transition-colors font-medium"
@@ -96,8 +113,8 @@ export default function HelpButton(): React.JSX.Element {
                 Tour starten
               </button>
               <button
-                onClick={() => setOpen(false)}
-                className="flex-1 text-[13px] py-2.5 rounded-xl font-medium text-white"
+                onClick={onClose}
+                className="flex-1 text-[13px] py-2.5 rounded-xl font-medium text-white transition-opacity hover:opacity-90"
                 style={{ background: 'var(--color-accent)' }}
               >
                 Schließen
@@ -109,3 +126,5 @@ export default function HelpButton(): React.JSX.Element {
     </>
   )
 }
+
+export default HelpIcon

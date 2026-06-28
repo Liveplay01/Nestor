@@ -122,7 +122,7 @@ export function PromptDialog({
         <div className="flex justify-end gap-2 mt-4">
           <button
             onClick={onCancel}
-            className="h-8 px-4 rounded-lg text-[12.5px] font-medium text-text-muted transition-colors hover:bg-surface border border-border-strong"
+            className="h-8 px-4 rounded-lg text-[12.5px] font-medium text-text-muted transition-all duration-150 btn-ghost border border-border-strong"
             style={{ background: 'var(--color-bg)' }}
           >
             Abbrechen

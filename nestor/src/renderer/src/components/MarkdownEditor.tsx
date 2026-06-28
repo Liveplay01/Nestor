@@ -138,7 +138,7 @@ export default function MarkdownEditor(): React.JSX.Element | null {
         </div>
         <button
           onClick={() => setOpenMarkdownFile(null)}
-          className="flex items-center justify-center rounded-md text-text-faint transition-colors hover:bg-black/[0.05]"
+          className="flex items-center justify-center rounded-md text-text-faint transition-all duration-150 btn-ghost"
           style={{ width: 26, height: 26 }}
           title="Schließen"
         >

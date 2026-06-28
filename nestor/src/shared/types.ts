@@ -58,7 +58,7 @@ export interface AccessedFile {
   accessedAt: number
 }
 
-export type NavSection = 'home' | 'files' | 'chat' | 'settings'
+export type NavSection = 'home' | 'files' | 'chat' | 'settings' | 'help'
 
 export type Theme = 'light' | 'dark'
 

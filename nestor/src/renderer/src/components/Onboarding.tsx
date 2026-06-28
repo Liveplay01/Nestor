@@ -258,7 +258,7 @@ export default function Onboarding(): React.JSX.Element {
               <div className="text-center mt-4">
                 <button
                   onClick={() => handleModeSelect(null)}
-                  className="text-[12.5px] text-text-hint hover:text-text-muted transition-colors underline underline-offset-2"
+                  className="text-[12.5px] text-text-hint hover:text-text-muted transition-colors underline underline-offset-2 btn-ghost rounded px-2 -mx-2"
                 >
                   Überspringen — ich richte das später in den Einstellungen ein
                 </button>

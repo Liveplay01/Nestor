@@ -159,7 +159,7 @@ function OpenBtn({ path }: { path: string }): React.JSX.Element {
   return (
     <button
       onClick={() => window.nestor.shell.openPath(path)}
-      className="h-8 px-4 rounded-lg text-[12.5px] font-medium transition-colors hover:bg-surface border border-border-strong text-text-muted"
+      className="h-8 px-4 rounded-lg text-[12.5px] font-medium transition-all duration-150 btn-ghost border border-border-strong text-text-muted"
       style={{ background: 'var(--color-bg)' }}
     >
       Mit Standardprogramm öffnen
@@ -643,7 +643,7 @@ export default function Explorer(): React.JSX.Element {
             onClick={handlePaste}
             disabled={!clipboard}
             title="Einfügen"
-            className="h-7 px-2.5 rounded text-[11.5px] font-medium text-text-muted transition-colors hover:bg-sidebar disabled:opacity-40"
+            className="h-7 px-2.5 rounded text-[11.5px] font-medium text-text-muted transition-all duration-150 btn-ghost disabled:opacity-40"
           >
             Einfügen
           </button>
@@ -651,7 +651,7 @@ export default function Explorer(): React.JSX.Element {
           <button
             onClick={() => loadEntries(currentPath)}
             title="Aktualisieren"
-            className="flex items-center justify-center h-7 w-7 rounded hover:bg-sidebar text-text-faint transition-colors"
+            className="flex items-center justify-center h-7 w-7 rounded gutter-hover text-text-faint transition-colors"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M1 4v6h6" /><path d="M23 20v-6h-6" />
@@ -682,11 +682,11 @@ export default function Explorer(): React.JSX.Element {
                   e.preventDefault()
                   setCtxMenu({ x: e.clientX, y: e.clientY, entry })
                 }}
-                className={`flex items-center gap-2.5 px-3 h-8 cursor-pointer transition-colors duration-100 ${
-                  selected?.path === entry.path
-                    ? 'bg-accent/[0.08] text-text-primary'
-                    : 'text-text-muted hover:bg-sidebar'
-                }`}
+              className={`flex items-center gap-2.5 px-3 h-8 cursor-pointer transition-colors duration-100 btn-ghost rounded-md ${
+                selected?.path === entry.path
+                  ? 'bg-accent/[0.08] text-text-primary'
+                  : 'text-text-muted'
+              }`}
               >
                 <FileIcon entry={entry} />
                 {renaming === entry.path ? (
