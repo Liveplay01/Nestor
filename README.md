@@ -13,7 +13,7 @@
 
 Nestor is a desktop application that lets you manage and organize your files through a natural language AI chat interface. It runs fully locally using Ollama, keeping your data on your device — or connects to any OpenAI-compatible API if you prefer a cloud model.
 
-[Download](#installation) · [Features](#features) · [Development](#development)
+[Website](https://nestor.gustaff.dev) · [Download](#installation) · [Features](#features) · [Development](#development)
 
 </div>
 
@@ -73,11 +73,24 @@ Nestor checks for new releases on GitHub automatically and installs updates in t
 
 ## Screenshots
 
-> Screenshots will be added here once the first public release is available.
-
-| Chat Interface | File Explorer | Settings |
-|---|---|---|
-| _coming soon_ | _coming soon_ | _coming soon_ |
+<table>
+  <tr>
+    <td><img src="sc1.png" alt="Chat Interface" /></td>
+    <td><img src="sc2.png" alt="File Explorer" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Chat Interface</sub></td>
+    <td align="center"><sub>File Explorer</sub></td>
+  </tr>
+  <tr>
+    <td><img src="sc3.png" alt="Home Screen" /></td>
+    <td><img src="sc4.png" alt="Settings" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Home Screen</sub></td>
+    <td align="center"><sub>Settings</sub></td>
+  </tr>
+</table>
 
 ---
 
@@ -230,6 +243,6 @@ This is the first public release of Nestor.
 
 <div align="center">
 
-Built with Electron, React, and Ollama.
+Built with Electron, React, and Ollama · [nestor.gustaff.dev](https://nestor.gustaff.dev)
 
 </div>
