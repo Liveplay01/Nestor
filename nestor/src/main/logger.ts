@@ -8,7 +8,6 @@ const localAppData = process.env['LOCALAPPDATA'] ?? ''
 log.transports.file.resolvePathFn = () =>
   join(localAppData, 'Nestor', 'logs', 'main.log')
 log.transports.file.maxSize = 10 * 1024 * 1024
-log.transports.file.archiveLog = (oldPath) => oldPath + '.old'
 log.transports.file.level = 'info'
 
 // Konsolen-Output nur in Dev, damit keine PII in Prod-Terminals landet

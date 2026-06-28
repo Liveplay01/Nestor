@@ -304,7 +304,7 @@ export default function SettingsPage(): React.JSX.Element {
         <Section title="System">
           <Row
             label="Beim Windows-Start öffnen"
-            hint="Nestor startet automatisch, wenn du dich bei Windows anmeldest. Die Einstellung ist auch im Task-Manager unter dem Tab „Autostart" sichtbar."
+            hint="Nestor startet automatisch, wenn du dich bei Windows anmeldest — auch im Task-Manager unter Autostart sichtbar."
           >
             <Toggle
               value={launchAtStartup}
