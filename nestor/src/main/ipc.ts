@@ -632,6 +632,7 @@ function startWatcher(folderPath: string, getWin: () => BrowserWindow | null): v
   watcher = chokidar.watch(folderPath, {
     depth: 3,
     ignoreInitial: true,
+    followSymlinks: false,
     ignored: /(^|[/\\])\../
   })
   const notify = (): void => {
