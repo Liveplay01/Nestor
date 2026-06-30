@@ -24,17 +24,25 @@ import {
   deleteFile,
   undoAction,
   searchFiles,
-  assertWithinRoot
+  searchFullText,
+  assertWithinRoot,
+  findDuplicates,
+  analyzeFolder,
+  analyzeStorage,
+  runMoveByAge,
+  runSortByType,
+  runDeleteEmptyFolders
 } from './fs-manager'
 import { checkOllama, streamChat, getAvailableModels, testExternalApi } from './ollama'
 import { runOnboarding } from './onboarding'
-import { Settings, HistoryItem } from '../shared/types'
+import { Settings, HistoryItem, SavedAction, AutomationRule, FileTagsMap } from '../shared/types'
 import log from './logger'
 
-const store = new Store<{ settings: Settings; history: HistoryItem[] }>({
+const store = new Store<{ settings: Settings; history: HistoryItem[]; savedActions: SavedAction[]; automations: AutomationRule[]; tags: FileTagsMap }>({
   defaults: {
     settings: {
       rootFolder: '',
+      workspaces: [],
       model: 'llama3.2:3b',
       language: 'de',
       accentColor: '#2563EB',
@@ -43,13 +51,21 @@ const store = new Store<{ settings: Settings; history: HistoryItem[] }>({
       apiKey: '',
       apiBaseUrl: 'https://api.openai.com/v1',
       theme: 'light',
-      notifications: true
+      notifications: true,
+      minimizeToTray: false
     },
-    history: []
+    history: [],
+    savedActions: [],
+    automations: [],
+    tags: {}
   }
 })
 
 let watcher: chokidar.FSWatcher | null = null
+
+export function getMinimizeToTray(): boolean {
+  return store.get('settings').minimizeToTray ?? false
+}
 
 export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
   // ── Window controls ──────────────────────────────────────
@@ -107,10 +123,10 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
   })
 
   // ── File system ───────────────────────────────────────────
-  ipcMain.handle('fs:list-dir', (_, { path }: { path: string }) => {
+  ipcMain.handle('fs:list-dir', (_, { path, limit, offset }: { path: string; limit?: number; offset?: number }) => {
     const root = store.get('settings').rootFolder
     assertWithinRoot(root, path)
-    return listDir(path)
+    return listDir(path, 0, 3, limit, offset)
   })
 
   ipcMain.handle('fs:read-file', (_, { path }: { path: string }) => {
@@ -327,6 +343,21 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
     log.info('User data cleared via app:clear-data')
   })
 
+  // ── Export & Berichte ─────────────────────────────────────
+  ipcMain.handle('app:save-export', async (_, { content, defaultName, filters }: { content: string; defaultName: string; filters: { name: string; extensions: string[] }[] }) => {
+    const win = BrowserWindow.getFocusedWindow()
+    if (!win) return false
+    try {
+      const result = await dialog.showSaveDialog(win, { defaultPath: defaultName, filters })
+      if (result.canceled || !result.filePath) return false
+      fs.writeFileSync(result.filePath, content, 'utf-8')
+      return result.filePath as string
+    } catch (err) {
+      log.error('[app:save-export]', err)
+      throw err
+    }
+  })
+
   // ── Deinstallation ────────────────────────────────────────
   ipcMain.handle('app:get-uninstall-info', () => {
     const exeDir = path.dirname(app.getPath('exe'))
@@ -362,11 +393,238 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
     app.setLoginItemSettings({ openAtLogin: enabled, name: 'Nestor' })
   })
 
+  // ── Duplicate finder ──────────────────────────────────────
+  ipcMain.handle('fs:find-duplicates', async () => {
+    const root = store.get('settings').rootFolder
+    if (!root) return []
+    try {
+      return await findDuplicates(root)
+    } catch (err) {
+      log.error('[fs:find-duplicates]', err)
+      throw err
+    }
+  })
+
+  // ── Folder analysis ───────────────────────────────────────
+  ipcMain.handle('fs:analyze-folder', () => {
+    const root = store.get('settings').rootFolder
+    if (!root) return null
+    try {
+      return analyzeFolder(root)
+    } catch (err) {
+      log.error('[fs:analyze-folder]', err)
+      throw err
+    }
+  })
+
+  ipcMain.handle('fs:analyze-storage', (_, { rootFolder, downloadsPath }: { rootFolder: string; downloadsPath: string }) => {
+    if (!rootFolder) return null
+    try {
+      return analyzeStorage(rootFolder, downloadsPath)
+    } catch (err) {
+      log.error('[fs:analyze-storage]', err)
+      throw err
+    }
+  })
+
+  // ── Saved quick actions ───────────────────────────────────
+  ipcMain.handle('actions:get-all', () => store.get('savedActions'))
+  ipcMain.handle('actions:save', (_, action: SavedAction) => {
+    const actions = store.get('savedActions')
+    store.set('savedActions', [...actions, action])
+  })
+  ipcMain.handle('actions:update', (_, updated: SavedAction) => {
+    const actions = store.get('savedActions')
+    store.set('savedActions', actions.map(a => a.id === updated.id ? updated : a))
+  })
+  ipcMain.handle('actions:delete', (_, id: string) => {
+    const actions = store.get('savedActions')
+    store.set('savedActions', actions.filter(a => a.id !== id))
+  })
+
+  // ── Workspace management ──────────────────────────────────
+  ipcMain.handle('app:add-workspace', async () => {
+    const win = getWin()
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
+    if (result.canceled || !result.filePaths[0]) return null
+    const folderPath = result.filePaths[0]
+    const current = store.get('settings')
+    const workspaces = current.workspaces ?? []
+    if (!workspaces.includes(folderPath)) {
+      const next = [...workspaces, folderPath].slice(-5) // max 5
+      store.set('settings', { ...current, workspaces: next, rootFolder: folderPath })
+      startWatcher(folderPath, getWin)
+      getWin()?.webContents.send('fs:changed', folderPath)
+      return { workspaces: next, rootFolder: folderPath }
+    }
+    // Already in list — just switch to it
+    store.set('settings', { ...current, rootFolder: folderPath })
+    startWatcher(folderPath, getWin)
+    getWin()?.webContents.send('fs:changed', folderPath)
+    return { workspaces, rootFolder: folderPath }
+  })
+
+  ipcMain.handle('app:remove-workspace', (_, { folderPath }: { folderPath: string }) => {
+    const current = store.get('settings')
+    const workspaces = (current.workspaces ?? []).filter(w => w !== folderPath)
+    let rootFolder = current.rootFolder
+    if (rootFolder === folderPath) {
+      rootFolder = workspaces[0] ?? ''
+      if (rootFolder) startWatcher(rootFolder, getWin)
+      getWin()?.webContents.send('fs:changed', rootFolder)
+    }
+    store.set('settings', { ...current, workspaces, rootFolder })
+    return { workspaces, rootFolder }
+  })
+
+  ipcMain.handle('app:switch-workspace', (_, { folderPath }: { folderPath: string }) => {
+    const current = store.get('settings')
+    store.set('settings', { ...current, rootFolder: folderPath })
+    startWatcher(folderPath, getWin)
+    getWin()?.webContents.send('fs:changed', folderPath)
+    return folderPath
+  })
+
+  // ── Full-text search ──────────────────────────────────────
+  ipcMain.handle('fs:search-fulltext', async (_, { query }: { query: string }) => {
+    const root = store.get('settings').rootFolder
+    if (!root || query.length < 2) return []
+    return searchFullText(root, query)
+  })
+
+  // ── Automations CRUD ──────────────────────────────────────
+  ipcMain.handle('automations:get-all', () => store.get('automations'))
+
+  ipcMain.handle('automations:save', (_, rule: AutomationRule) => {
+    const list = store.get('automations')
+    store.set('automations', [...list, rule])
+  })
+
+  ipcMain.handle('automations:update', (_, rule: AutomationRule) => {
+    const list = store.get('automations').map(r => r.id === rule.id ? rule : r)
+    store.set('automations', list)
+  })
+
+  ipcMain.handle('automations:delete', (_, id: string) => {
+    const list = store.get('automations').filter(r => r.id !== id)
+    store.set('automations', list)
+  })
+
+  ipcMain.handle('automations:run-now', async (_, id: string) => {
+    const list = store.get('automations')
+    const rule = list.find(r => r.id === id)
+    if (!rule) return
+    const root = store.get('settings').rootFolder
+    const source = rule.config.sourceFolder || root
+    let result = { count: 0, label: '' }
+
+    try {
+      if (rule.action === 'move_by_age') {
+        const target = rule.config.targetFolder || path.join(root, 'Archiv')
+        const age = rule.config.ageInDays ?? 30
+        const { moved } = runMoveByAge(source, target, age)
+        result = { count: moved, label: `${moved} Datei${moved !== 1 ? 'en' : ''} verschoben` }
+      } else if (rule.action === 'sort_by_type') {
+        const { moved } = runSortByType(source)
+        result = { count: moved, label: `${moved} Datei${moved !== 1 ? 'en' : ''} sortiert` }
+      } else if (rule.action === 'delete_empty_folders') {
+        const { deleted } = runDeleteEmptyFolders(source)
+        result = { count: deleted, label: `${deleted} leere${deleted !== 1 ? ' Ordner' : 'r Ordner'} gelöscht` }
+      }
+    } catch (err) {
+      log.error('[automations:run-now]', err)
+      return { ok: false, label: 'Fehler beim Ausführen' }
+    }
+
+    const now = Date.now()
+    const updated = list.map(r => r.id === id ? { ...r, lastRun: now, lastResult: result.label } : r)
+    store.set('automations', updated)
+    getWin()?.webContents.send('fs:changed', store.get('settings').rootFolder)
+    getWin()?.webContents.send('automations:completed', { id, result: result.label })
+    return { ok: true, label: result.label }
+  })
+
+  // ── Automation Scheduler ──────────────────────────────────
+  function checkAndRunDueAutomations(): void {
+    const rules = store.get('automations').filter(r => r.enabled)
+    const root = store.get('settings').rootFolder
+    if (!root) return
+    const now = Date.now()
+    const DAY = 24 * 60 * 60 * 1000
+
+    for (const rule of rules) {
+      let due = false
+      if (rule.trigger === 'on_start') {
+        due = rule.lastRun === null
+      } else if (rule.trigger === 'daily') {
+        due = rule.lastRun === null || (now - rule.lastRun) >= DAY
+      } else if (rule.trigger === 'weekly') {
+        due = rule.lastRun === null || (now - rule.lastRun) >= 7 * DAY
+      }
+      if (!due) continue
+
+      try {
+        const source = rule.config.sourceFolder || root
+        let resultLabel = ''
+        if (rule.action === 'move_by_age') {
+          const target = rule.config.targetFolder || path.join(root, 'Archiv')
+          const { moved } = runMoveByAge(source, target, rule.config.ageInDays ?? 30)
+          resultLabel = `${moved} Datei${moved !== 1 ? 'en' : ''} verschoben`
+        } else if (rule.action === 'sort_by_type') {
+          const { moved } = runSortByType(source)
+          resultLabel = `${moved} Datei${moved !== 1 ? 'en' : ''} sortiert`
+        } else if (rule.action === 'delete_empty_folders') {
+          const { deleted } = runDeleteEmptyFolders(source)
+          resultLabel = `${deleted} leere${deleted !== 1 ? ' Ordner' : 'r Ordner'} gelöscht`
+        }
+        const list = store.get('automations').map(r => r.id === rule.id ? { ...r, lastRun: now, lastResult: resultLabel } : r)
+        store.set('automations', list)
+        log.info(`[automation] "${rule.name}": ${resultLabel}`)
+      } catch (err) {
+        log.error('[automation]', rule.name, err)
+      }
+    }
+  }
+
+  // ── Batch rename ──────────────────────────────────────────
+  ipcMain.handle('fs:batch-rename', (_, renames: { from: string; newName: string }[]) => {
+    const root = store.get('settings').rootFolder
+    const results: HistoryItem[] = []
+    for (const r of renames) {
+      assertWithinRoot(root, r.from)
+      const item = renameFile(r.from, r.newName)
+      saveHistory(item)
+      results.push(item)
+    }
+    return results
+  })
+
+  // ── Tags ──────────────────────────────────────────────────
+  ipcMain.handle('tags:get-all', () => store.get('tags'))
+
+  ipcMain.handle('tags:set-file-tags', (_, { filePath, tags }: { filePath: string; tags: string[] }) => {
+    const current = store.get('tags')
+    if (tags.length === 0) {
+      const { [filePath]: _, ...rest } = current
+      store.set('tags', rest)
+    } else {
+      store.set('tags', { ...current, [filePath]: tags })
+    }
+  })
+
+  ipcMain.handle('tags:get-all-names', () => {
+    const tags = store.get('tags')
+    return [...new Set(Object.values(tags).flat())].sort()
+  })
+
   // ── Startup: init watcher if folder already set ───────────
   const settings = store.get('settings')
   if (settings.rootFolder) {
     startWatcher(settings.rootFolder, getWin)
   }
+  checkAndRunDueAutomations()
+  setInterval(checkAndRunDueAutomations, 60 * 60 * 1000)
 }
 
 function startWatcher(folderPath: string, getWin: () => BrowserWindow | null): void {

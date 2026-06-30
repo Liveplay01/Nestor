@@ -1,12 +1,54 @@
-import { app, BrowserWindow, shell, nativeImage } from 'electron'
+import { app, BrowserWindow, shell, nativeImage, Tray, Menu } from 'electron'
 import { join } from 'path'
-import { registerIpcHandlers } from './ipc'
+import { registerIpcHandlers, getMinimizeToTray } from './ipc'
 import { setupAutoUpdater, checkPendingUpdate } from './updater'
 import log from './logger'
 
 const isDev = process.env['NODE_ENV'] === 'development' || !!process.env['ELECTRON_RENDERER_URL']
 
 let mainWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+let shuttingDown = false
+
+function createTray(): void {
+  const iconPath = join(__dirname, '../../resources/icon.ico')
+  const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 })
+  tray = new Tray(icon)
+  tray.setToolTip('Nestor')
+
+  const updateMenu = (): void => {
+    const menu = Menu.buildFromTemplate([
+      {
+        label: 'Nestor öffnen',
+        click: () => {
+          mainWindow?.show()
+          mainWindow?.focus()
+        }
+      },
+      { type: 'separator' },
+      {
+        label: 'Beenden',
+        click: () => {
+          shuttingDown = true
+          app.quit()
+        }
+      }
+    ])
+    tray?.setContextMenu(menu)
+  }
+
+  updateMenu()
+
+  tray.on('click', () => {
+    if (!mainWindow) return
+    if (mainWindow.isVisible()) {
+      mainWindow.hide()
+    } else {
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  })
+}
 
 function createWindow(): void {
   const updatedVersion = checkPendingUpdate()
@@ -36,10 +78,17 @@ function createWindow(): void {
   mainWindow.on('ready-to-show', () => {
     mainWindow!.show()
     if (updatedVersion) {
-      // Slight delay so the UI is fully painted before the toast appears
       setTimeout(() => {
         mainWindow!.webContents.send('update:installed', updatedVersion)
       }, 1500)
+    }
+  })
+
+  // Intercept close: hide to tray if enabled, otherwise allow normal quit
+  mainWindow.on('close', (event) => {
+    if (!shuttingDown && getMinimizeToTray()) {
+      event.preventDefault()
+      mainWindow?.hide()
     }
   })
 
@@ -61,6 +110,7 @@ app.whenReady().then(() => {
 
   registerIpcHandlers(() => mainWindow)
   createWindow()
+  createTray()
 
   if (!isDev) setupAutoUpdater()
 
@@ -71,7 +121,10 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    app.quit()
+    // Don't quit here if tray is active — the window is just hidden
+    if (!tray || shuttingDown) {
+      app.quit()
+    }
   }
 })
 
@@ -83,9 +136,7 @@ process.on('unhandledRejection', (reason) => {
 })
 
 // WM_QUERYENDSESSION — Windows sends this before shutdown/restart/logoff.
-// We notify the renderer so it can flush any in-memory state, then quit
-// within 1 s so we never block the OS shutdown sequence.
-let shuttingDown = false
+// Notify the renderer to flush in-memory state, then quit within 1s.
 app.on('before-quit', (event) => {
   if (shuttingDown) return
   event.preventDefault()

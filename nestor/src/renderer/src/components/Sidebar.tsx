@@ -48,6 +48,15 @@ const ICONS: NavItem[] = [
         <path d="M12 17h.01" />
       </svg>
     )
+  },
+  {
+    id: 'automations',
+    label: 'Automationen',
+    icon: (
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+      </svg>
+    )
   }
 ]
 
@@ -69,7 +78,8 @@ const SHORT_LABELS: Record<string, string> = {
   files: 'Dateien',
   chat: 'Chat',
   help: 'Hilfe',
-  settings: 'Einst.'
+  settings: 'Einst.',
+  automations: 'Auto.'
 }
 
 function NavButton({ item, active, onClick }: { item: NavItem & { action?: () => void }; active: boolean; onClick: () => void }): React.JSX.Element {
@@ -100,7 +110,7 @@ function NavButton({ item, active, onClick }: { item: NavItem & { action?: () =>
           {item.icon}
         </span>
         <span
-          className="relative z-10 text-[9.5px] font-medium leading-none transition-colors duration-150"
+          className="relative z-10 text-[11px] font-medium leading-none transition-colors duration-150"
           style={{ color: active ? 'var(--color-accent)' : 'var(--color-text-hint)' }}
         >
           {shortLabel}

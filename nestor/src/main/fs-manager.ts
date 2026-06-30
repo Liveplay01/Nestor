@@ -1,8 +1,8 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { shell } from 'electron'
-import { FileEntry, FileType, HistoryItem } from '../shared/types'
-import { randomUUID } from 'crypto'
+import { FileEntry, FileType, HistoryItem, DuplicateGroup, DuplicateFile, FolderStats, LargeFile, FileTypeBreakdown, SearchResult } from '../shared/types'
+import { randomUUID, createHash } from 'crypto'
 import log from './logger'
 
 export function getFileType(filePath: string): FileType {
@@ -15,7 +15,7 @@ export function getFileType(filePath: string): FileType {
   return 'other'
 }
 
-export function listDir(dirPath: string, depth = 0, maxDepth = 3): FileEntry[] {
+export function listDir(dirPath: string, depth = 0, maxDepth = 3, limit?: number, offset = 0): FileEntry[] {
   if (!fs.existsSync(dirPath)) return []
   const entries: FileEntry[] = []
   let items: string[]
@@ -54,12 +54,17 @@ export function listDir(dirPath: string, depth = 0, maxDepth = 3): FileEntry[] {
     }
   }
 
-  // Folders first, then files, alphabetically within each group
-  return entries.sort((a, b) => {
+  const sorted = entries.sort((a, b) => {
     if (a.isFolder && !b.isFolder) return -1
     if (!a.isFolder && b.isFolder) return 1
     return a.name.localeCompare(b.name)
   })
+
+  if (limit !== undefined) {
+    return sorted.slice(offset, offset + limit)
+  }
+
+  return sorted
 }
 
 export function readFile(filePath: string): string {
@@ -239,6 +244,287 @@ export async function searchFiles(rootPath: string, query: string): Promise<File
 
   await walk(rootPath, 0)
   return results.slice(0, 50)
+}
+
+export async function findDuplicates(rootFolder: string): Promise<DuplicateGroup[]> {
+  const files: { path: string; name: string; size: number }[] = []
+
+  function walk(dir: string, depth: number): void {
+    if (depth > 4) return
+    let items: string[]
+    try { items = fs.readdirSync(dir) } catch { return }
+    for (const name of items) {
+      if (name.startsWith('.')) continue
+      const fullPath = path.join(dir, name)
+      let stat: fs.Stats
+      try { stat = fs.statSync(fullPath) } catch { continue }
+      if (stat.isDirectory()) {
+        walk(fullPath, depth + 1)
+      } else if (stat.size > 0) {
+        files.push({ path: fullPath, name, size: stat.size })
+      }
+    }
+  }
+
+  walk(rootFolder, 0)
+
+  // Pre-filter: only compare files with the same size
+  const bySize = new Map<number, typeof files>()
+  for (const f of files) {
+    const group = bySize.get(f.size) ?? []
+    group.push(f)
+    bySize.set(f.size, group)
+  }
+
+  const duplicates: DuplicateGroup[] = []
+
+  for (const [size, group] of bySize) {
+    if (group.length < 2) continue
+    const byHash = new Map<string, DuplicateFile[]>()
+    for (const f of group) {
+      try {
+        const buf = fs.readFileSync(f.path)
+        const hash = createHash('md5').update(buf).digest('hex')
+        const stat = fs.statSync(f.path)
+        const arr = byHash.get(hash) ?? []
+        arr.push({ path: f.path, name: f.name, modified: stat.mtimeMs })
+        byHash.set(hash, arr)
+      } catch { continue }
+    }
+    for (const [hash, dupeFiles] of byHash) {
+      if (dupeFiles.length >= 2) {
+        duplicates.push({ hash, size, files: dupeFiles })
+      }
+    }
+  }
+
+  return duplicates.sort((a, b) => b.size * b.files.length - a.size * a.files.length)
+}
+
+export interface StorageInsight {
+  totalSize: number
+  oldFiles: number
+  downloadsFileCount: number
+}
+
+export function analyzeStorage(rootFolder: string, downloadsPath: string): StorageInsight {
+  const stats = analyzeFolder(rootFolder)
+  let downloadsFileCount = 0
+  try {
+    const items = fs.readdirSync(downloadsPath)
+    downloadsFileCount = items.filter(f => !f.startsWith('.')).length
+  } catch {}
+
+  return {
+    totalSize: stats.totalSize,
+    oldFiles: stats.oldFiles.length,
+    downloadsFileCount
+  }
+}
+
+export function analyzeFolder(rootFolder: string): FolderStats {
+  let totalFiles = 0
+  let totalFolders = 0
+  let totalSize = 0
+  const byType = new Map<FileType, { count: number; size: number }>()
+  const allFiles: { path: string; name: string; size: number; modified: number }[] = []
+  const oneYearAgo = Date.now() - 365 * 24 * 60 * 60 * 1000
+
+  function walk(dir: string, depth: number): void {
+    if (depth > 4) return
+    let items: string[]
+    try { items = fs.readdirSync(dir) } catch { return }
+    for (const name of items) {
+      if (name.startsWith('.')) continue
+      const fullPath = path.join(dir, name)
+      let stat: fs.Stats
+      try { stat = fs.statSync(fullPath) } catch { continue }
+      if (stat.isDirectory()) {
+        totalFolders++
+        walk(fullPath, depth + 1)
+      } else {
+        totalFiles++
+        totalSize += stat.size
+        const type = getFileType(fullPath)
+        const existing = byType.get(type) ?? { count: 0, size: 0 }
+        byType.set(type, { count: existing.count + 1, size: existing.size + stat.size })
+        allFiles.push({ path: fullPath, name, size: stat.size, modified: stat.mtimeMs })
+      }
+    }
+  }
+
+  walk(rootFolder, 0)
+
+  const largestFiles: LargeFile[] = [...allFiles]
+    .sort((a, b) => b.size - a.size)
+    .slice(0, 10)
+    .map(f => ({ path: f.path, name: f.name, size: f.size, modified: f.modified }))
+
+  const oldFiles: LargeFile[] = allFiles
+    .filter(f => f.modified < oneYearAgo)
+    .sort((a, b) => a.modified - b.modified)
+    .slice(0, 20)
+    .map(f => ({ path: f.path, name: f.name, size: f.size, modified: f.modified }))
+
+  const fileTypes: FileType[] = ['pdf', 'doc', 'xls', 'ppt', 'img', 'other']
+  const breakdown: FileTypeBreakdown[] = fileTypes
+    .filter(type => byType.has(type))
+    .map(type => ({ type, ...byType.get(type)! }))
+    .sort((a, b) => b.size - a.size)
+
+  return { totalFiles, totalFolders, totalSize, byType: breakdown, largestFiles, oldFiles }
+}
+
+const TEXT_EXTENSIONS = new Set([
+  '.txt', '.md', '.json', '.csv', '.xml', '.html', '.htm', '.js', '.ts',
+  '.jsx', '.tsx', '.css', '.scss', '.yaml', '.yml', '.toml', '.ini', '.log',
+  '.py', '.rb', '.java', '.c', '.cpp', '.h', '.rs', '.go', '.sh', '.bat'
+])
+
+export async function searchFullText(rootPath: string, query: string): Promise<SearchResult[]> {
+  const q = query.toLowerCase()
+  const filePaths: { filePath: string; name: string }[] = []
+
+  function collectFiles(dir: string, depth: number): void {
+    if (depth > 4) return
+    let items: string[]
+    try { items = fs.readdirSync(dir) } catch { return }
+    for (const name of items) {
+      if (name.startsWith('.')) continue
+      const fullPath = path.join(dir, name)
+      let stat: fs.Stats
+      try { stat = fs.statSync(fullPath) } catch { continue }
+      if (stat.isDirectory()) {
+        collectFiles(fullPath, depth + 1)
+      } else if (TEXT_EXTENSIONS.has(path.extname(name).toLowerCase()) && stat.size < 2 * 1024 * 1024) {
+        filePaths.push({ filePath: fullPath, name })
+      }
+    }
+  }
+
+  collectFiles(rootPath, 0)
+
+  const results: SearchResult[] = []
+
+  const processFile = async (filePath: string, name: string): Promise<SearchResult | null> => {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8')
+      const lines = content.split('\n')
+      let firstMatch = -1
+      let matchCount = 0
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].toLowerCase().includes(q)) {
+          if (firstMatch === -1) firstMatch = i
+          matchCount++
+        }
+      }
+      if (firstMatch === -1) return null
+      const preview = lines[firstMatch].trim().slice(0, 120)
+      return {
+        file: { name, path: filePath, type: getFileType(filePath), isFolder: false },
+        lineNumber: firstMatch + 1,
+        linePreview: preview,
+        matchCount
+      }
+    } catch {
+      return null
+    }
+  }
+
+  // Process in batches of 20 parallel reads
+  for (let i = 0; i < filePaths.length && results.length < 60; i += 20) {
+    const batch = filePaths.slice(i, i + 20)
+    const batchResults = await Promise.all(batch.map(f => processFile(f.filePath, f.name)))
+    for (const r of batchResults) {
+      if (r) results.push(r)
+      if (results.length >= 60) break
+    }
+  }
+
+  return results.sort((a, b) => b.matchCount - a.matchCount)
+}
+
+export function runMoveByAge(sourceFolder: string, targetFolder: string, ageInDays: number): { moved: number } {
+  const cutoff = Date.now() - ageInDays * 24 * 60 * 60 * 1000
+  let moved = 0
+  let items: string[]
+  try { items = fs.readdirSync(sourceFolder) } catch { return { moved } }
+
+  fs.mkdirSync(targetFolder, { recursive: true })
+
+  for (const name of items) {
+    if (name.startsWith('.')) continue
+    const fullPath = path.join(sourceFolder, name)
+    let stat: fs.Stats
+    try { stat = fs.statSync(fullPath) } catch { continue }
+    if (!stat.isDirectory() && stat.mtimeMs < cutoff) {
+      const dest = path.join(targetFolder, name)
+      try {
+        fs.renameSync(fullPath, dest)
+        moved++
+      } catch {
+        try { fs.copyFileSync(fullPath, dest); fs.unlinkSync(fullPath); moved++ } catch {}
+      }
+    }
+  }
+  return { moved }
+}
+
+export function runSortByType(sourceFolder: string): { moved: number } {
+  const typeToFolder: Record<string, string> = {
+    pdf: 'Dokumente', doc: 'Dokumente', xls: 'Tabellen', ppt: 'Präsentationen',
+    img: 'Bilder', other: 'Sonstiges'
+  }
+  let moved = 0
+  let items: string[]
+  try { items = fs.readdirSync(sourceFolder) } catch { return { moved } }
+
+  for (const name of items) {
+    if (name.startsWith('.')) continue
+    const fullPath = path.join(sourceFolder, name)
+    let stat: fs.Stats
+    try { stat = fs.statSync(fullPath) } catch { continue }
+    if (stat.isDirectory()) continue
+    const type = getFileType(fullPath)
+    const folderName = typeToFolder[type] ?? 'Sonstiges'
+    const destDir = path.join(sourceFolder, folderName)
+    fs.mkdirSync(destDir, { recursive: true })
+    const dest = path.join(destDir, name)
+    if (dest === fullPath) continue
+    try {
+      fs.renameSync(fullPath, dest)
+      moved++
+    } catch {
+      try { fs.copyFileSync(fullPath, dest); fs.unlinkSync(fullPath); moved++ } catch {}
+    }
+  }
+  return { moved }
+}
+
+export function runDeleteEmptyFolders(rootFolder: string): { deleted: number } {
+  let deleted = 0
+
+  function deleteIfEmpty(dir: string): boolean {
+    let items: string[]
+    try { items = fs.readdirSync(dir) } catch { return false }
+    // Process children first (bottom-up)
+    for (const name of items) {
+      const fullPath = path.join(dir, name)
+      let stat: fs.Stats
+      try { stat = fs.statSync(fullPath) } catch { continue }
+      if (stat.isDirectory()) deleteIfEmpty(fullPath)
+    }
+    // Re-check after removing children
+    let remaining: string[]
+    try { remaining = fs.readdirSync(dir) } catch { return false }
+    if (remaining.length === 0 && dir !== rootFolder) {
+      try { fs.rmdirSync(dir); deleted++; return true } catch {}
+    }
+    return false
+  }
+
+  deleteIfEmpty(rootFolder)
+  return { deleted }
 }
 
 function formatTime(date: Date): string {

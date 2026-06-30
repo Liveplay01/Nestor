@@ -8,7 +8,9 @@ import type {
   Settings,
   FileEntry,
   OpenMarkdownFile,
-  ToastItem
+  ToastItem,
+  SavedAction,
+  AutomationRule
 } from '@shared/types'
 
 interface NestorStore {
@@ -68,6 +70,30 @@ interface NestorStore {
   // Onboarding
   onboardingComplete: boolean
   setOnboardingComplete: (v: boolean) => void
+
+  // Saved quick actions
+  savedActions: SavedAction[]
+  setSavedActions: (actions: SavedAction[]) => void
+  addSavedAction: (a: SavedAction) => void
+  updateSavedAction: (a: SavedAction) => void
+  removeSavedAction: (id: string) => void
+
+  // Automations
+  automations: AutomationRule[]
+  setAutomations: (a: AutomationRule[]) => void
+  addAutomation: (a: AutomationRule) => void
+  updateAutomation: (a: AutomationRule) => void
+  removeAutomation: (id: string) => void
+
+  // Multi-select (Batch-Rename)
+  selectedFiles: Set<string>
+  toggleFileSelection: (path: string) => void
+  clearFileSelection: () => void
+
+  // Tags
+  fileTags: Record<string, string[]>
+  setFileTags: (tags: Record<string, string[]>) => void
+  setTagsForFile: (path: string, tags: string[]) => void
 
   // Toasts
   toasts: ToastItem[]
@@ -152,6 +178,37 @@ export const useStore = create<NestorStore>((set) => ({
 
   onboardingComplete: false,
   setOnboardingComplete: (v) => set({ onboardingComplete: v }),
+
+  savedActions: [],
+  setSavedActions: (actions) => set({ savedActions: actions }),
+  addSavedAction: (a) => set((state) => ({ savedActions: [...state.savedActions, a] })),
+  updateSavedAction: (a) => set((state) => ({ savedActions: state.savedActions.map(x => x.id === a.id ? a : x) })),
+  removeSavedAction: (id) => set((state) => ({ savedActions: state.savedActions.filter(x => x.id !== id) })),
+
+  automations: [],
+  setAutomations: (a) => set({ automations: a }),
+  addAutomation: (a) => set((state) => ({ automations: [...state.automations, a] })),
+  updateAutomation: (a) => set((state) => ({ automations: state.automations.map(x => x.id === a.id ? a : x) })),
+  removeAutomation: (id) => set((state) => ({ automations: state.automations.filter(x => x.id !== id) })),
+
+  selectedFiles: new Set(),
+  toggleFileSelection: (path) =>
+    set((state) => {
+      const next = new Set(state.selectedFiles)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      return { selectedFiles: next }
+    }),
+  clearFileSelection: () => set({ selectedFiles: new Set() }),
+
+  fileTags: {},
+  setFileTags: (tags) => set({ fileTags: tags }),
+  setTagsForFile: (path, tags) =>
+    set((state) => ({
+      fileTags: tags.length === 0
+        ? Object.fromEntries(Object.entries(state.fileTags).filter(([k]) => k !== path))
+        : { ...state.fileTags, [path]: tags }
+    })),
 
   toasts: [],
   addToast: (t) => set((state) => ({ toasts: [...state.toasts, { ...t, id: Math.random().toString(36).slice(2) }] })),

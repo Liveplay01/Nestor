@@ -25,6 +25,7 @@ export interface Message {
   chips?: FileChip[]
   time?: string
   isStreaming?: boolean
+  isToolResult?: boolean
   errorAction?: { label: string; nav: NavSection }
 }
 
@@ -58,7 +59,9 @@ export interface AccessedFile {
   accessedAt: number
 }
 
-export type NavSection = 'home' | 'files' | 'chat' | 'settings' | 'help'
+export type NavSection = 'home' | 'files' | 'chat' | 'settings' | 'help' | 'automations'
+
+export type FileTagsMap = Record<string, string[]>
 
 export type Theme = 'light' | 'dark'
 
@@ -88,6 +91,7 @@ export interface OnboardingProgress {
 
 export interface Settings {
   rootFolder: string
+  workspaces: string[]
   model: string
   language: string
   accentColor: string
@@ -97,6 +101,7 @@ export interface Settings {
   apiBaseUrl?: string
   theme: Theme
   notifications: boolean
+  minimizeToTray: boolean
 }
 
 export interface OllamaStatus {
@@ -121,4 +126,78 @@ export interface ToastItem {
   type: 'success' | 'error' | 'info'
   message: string
   duration?: number
+}
+
+export interface DuplicateFile {
+  path: string
+  name: string
+  modified: number
+}
+
+export interface DuplicateGroup {
+  hash: string
+  size: number
+  files: DuplicateFile[]
+}
+
+export interface SavedAction {
+  id: string
+  name: string
+  icon: string
+  prompt: string
+  createdAt: number
+}
+
+export interface LargeFile {
+  path: string
+  name: string
+  size: number
+  modified: number
+}
+
+export interface FileTypeBreakdown {
+  type: FileType
+  count: number
+  size: number
+}
+
+export interface StorageInsight {
+  totalSize: number
+  oldFiles: number
+  downloadsFileCount: number
+}
+
+export interface FolderStats {
+  totalFiles: number
+  totalFolders: number
+  totalSize: number
+  byType: FileTypeBreakdown[]
+  largestFiles: LargeFile[]
+  oldFiles: LargeFile[]
+}
+
+export interface SearchResult {
+  file: FileEntry
+  lineNumber: number
+  linePreview: string
+  matchCount: number
+}
+
+export type AutomationTrigger = 'daily' | 'weekly' | 'on_start'
+export type AutomationActionType = 'move_by_age' | 'sort_by_type' | 'delete_empty_folders'
+
+export interface AutomationRule {
+  id: string
+  name: string
+  enabled: boolean
+  trigger: AutomationTrigger
+  action: AutomationActionType
+  config: {
+    sourceFolder?: string
+    targetFolder?: string
+    ageInDays?: number
+  }
+  lastRun: number | null
+  lastResult?: string
+  createdAt: number
 }

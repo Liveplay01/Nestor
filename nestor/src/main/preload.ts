@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Settings, OllamaChatMessage } from '../shared/types'
+import type { Settings, OllamaChatMessage, SavedAction, AutomationRule, FileTagsMap } from '../shared/types'
 
 contextBridge.exposeInMainWorld('nestor', {
   window: {
@@ -14,7 +14,7 @@ contextBridge.exposeInMainWorld('nestor', {
     selectFolder: (): Promise<string | null> => ipcRenderer.invoke('app:select-folder')
   },
   fs: {
-    listDir: (path: string) => ipcRenderer.invoke('fs:list-dir', { path }),
+    listDir: (path: string, limit?: number, offset?: number) => ipcRenderer.invoke('fs:list-dir', { path, limit, offset }),
     readFile: (path: string) => ipcRenderer.invoke('fs:read-file', { path }),
     createFolder: (path: string) => ipcRenderer.invoke('fs:create-folder', { path }),
     copyFile: (from: string, to: string) => ipcRenderer.invoke('fs:copy-file', { from, to }),
@@ -33,7 +33,25 @@ contextBridge.exposeInMainWorld('nestor', {
       const handler = (_: unknown, p: string) => cb(p)
       ipcRenderer.on('fs:changed', handler)
       return () => ipcRenderer.removeListener('fs:changed', handler)
-    }
+    },
+    findDuplicates: () => ipcRenderer.invoke('fs:find-duplicates'),
+    analyzeFolder: () => ipcRenderer.invoke('fs:analyze-folder'),
+    analyzeStorage: (rootFolder: string, downloadsPath: string) => ipcRenderer.invoke('fs:analyze-storage', { rootFolder, downloadsPath }),
+    searchFullText: (query: string) => ipcRenderer.invoke('fs:search-fulltext', { query }),
+    batchRename: (renames: { from: string; newName: string }[]) =>
+      ipcRenderer.invoke('fs:batch-rename', renames)
+  },
+  tags: {
+    getAll: (): Promise<FileTagsMap> => ipcRenderer.invoke('tags:get-all'),
+    setFileTags: (filePath: string, tags: string[]): Promise<void> =>
+      ipcRenderer.invoke('tags:set-file-tags', { filePath, tags }),
+    getAllNames: (): Promise<string[]> => ipcRenderer.invoke('tags:get-all-names')
+  },
+  actions: {
+    getAll: (): Promise<SavedAction[]> => ipcRenderer.invoke('actions:get-all'),
+    save: (action: SavedAction): Promise<void> => ipcRenderer.invoke('actions:save', action),
+    update: (action: SavedAction): Promise<void> => ipcRenderer.invoke('actions:update', action),
+    delete: (id: string): Promise<void> => ipcRenderer.invoke('actions:delete', id)
   },
   shell: {
     openPath: (path: string) => ipcRenderer.invoke('shell:open-path', { path }),
@@ -48,10 +66,18 @@ contextBridge.exposeInMainWorld('nestor', {
     setStartup: (enabled: boolean): Promise<void> => ipcRenderer.invoke('app:set-startup', enabled),
     exportData: (): Promise<string> => ipcRenderer.invoke('app:export-data'),
     clearData: (): Promise<void> => ipcRenderer.invoke('app:clear-data'),
+    saveExport: (content: string, defaultName: string, filters: { name: string; extensions: string[] }[]): Promise<string | false> =>
+      ipcRenderer.invoke('app:save-export', { content, defaultName, filters }),
     getUninstallInfo: (): Promise<{ nestorFound: boolean; ollamaFound: boolean; isDev: boolean }> =>
       ipcRenderer.invoke('app:get-uninstall-info'),
     uninstall: (opts: { uninstallOllama: boolean }): Promise<void> =>
-      ipcRenderer.invoke('app:uninstall', opts)
+      ipcRenderer.invoke('app:uninstall', opts),
+    addWorkspace: (): Promise<{ workspaces: string[]; rootFolder: string } | null> =>
+      ipcRenderer.invoke('app:add-workspace'),
+    removeWorkspace: (folderPath: string): Promise<{ workspaces: string[]; rootFolder: string }> =>
+      ipcRenderer.invoke('app:remove-workspace', { folderPath }),
+    switchWorkspace: (folderPath: string): Promise<string> =>
+      ipcRenderer.invoke('app:switch-workspace', { folderPath })
   },
   ollama: {
     check: () => ipcRenderer.invoke('ollama:check'),
@@ -120,6 +146,18 @@ contextBridge.exposeInMainWorld('nestor', {
       const h = () => cb()
       ipcRenderer.on('app:before-quit', h)
       return () => ipcRenderer.removeListener('app:before-quit', h)
+    }
+  },
+  automations: {
+    getAll: (): Promise<AutomationRule[]> => ipcRenderer.invoke('automations:get-all'),
+    save: (rule: AutomationRule): Promise<void> => ipcRenderer.invoke('automations:save', rule),
+    update: (rule: AutomationRule): Promise<void> => ipcRenderer.invoke('automations:update', rule),
+    delete: (id: string): Promise<void> => ipcRenderer.invoke('automations:delete', id),
+    runNow: (id: string): Promise<{ ok: boolean; label: string }> => ipcRenderer.invoke('automations:run-now', id),
+    onCompleted: (cb: (payload: { id: string; result: string }) => void) => {
+      const h = (_: unknown, payload: { id: string; result: string }) => cb(payload)
+      ipcRenderer.on('automations:completed', h)
+      return () => ipcRenderer.removeListener('automations:completed', h)
     }
   }
 })

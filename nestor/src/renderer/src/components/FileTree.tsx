@@ -109,6 +109,7 @@ export default function FileTree(): React.JSX.Element {
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState<FileEntry[] | null>(null)
   const [isSearching, setIsSearching] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(200)
   const searchRef = useRef<HTMLInputElement>(null)
   const [promptDialog, setPromptDialog] = useState<PromptState>(null)
 
@@ -141,14 +142,20 @@ export default function FileTree(): React.JSX.Element {
     return unsub
   }, [loadTree])
 
+  useEffect(() => {
+    setVisibleCount(200)
+  }, [fileTree])
+
   // Search (debounced 500ms, with loading indicator)
   useEffect(() => {
     if (!search.trim() || !settings?.rootFolder) {
       setSearchResults(null)
       setIsSearching(false)
+      setVisibleCount(200)
       return
     }
     setIsSearching(true)
+    setVisibleCount(200)
     const t = setTimeout(async () => {
       try {
         const results = await window.nestor.fs.search(search)
@@ -184,7 +191,7 @@ export default function FileTree(): React.JSX.Element {
     })
   }
 
-  const displayTree = searchResults ?? fileTree
+  const displayTree = searchResults ?? fileTree.slice(0, visibleCount)
 
   return (
     <div
@@ -254,9 +261,24 @@ export default function FileTree(): React.JSX.Element {
             {search ? 'Keine Ergebnisse.' : 'Ordner ist leer.'}
           </div>
         ) : (
-          displayTree.map((entry) => (
-            <EntryRow key={entry.path} entry={entry} depth={0} />
-          ))
+          <>
+            {displayTree.map((entry) => (
+              <EntryRow key={entry.path} entry={entry} depth={0} />
+            ))}
+            {fileTree.length > visibleCount && !search && (
+              <div className="flex flex-col items-center gap-1 pt-2">
+                <button
+                  onClick={() => setVisibleCount(prev => prev + 200)}
+                  className="h-7 px-3 rounded text-[11.5px] font-medium text-text-muted transition-colors hover:bg-surface btn-ghost"
+                >
+                  Mehr laden ({fileTree.length - visibleCount} weitere)
+                </button>
+                <span className="text-[10.5px] text-text-hint">
+                  Ordner enthält {fileTree.length} Einträge — zeige erste {visibleCount}
+                </span>
+              </div>
+            )}
+          </>
         )}
       </div>
 

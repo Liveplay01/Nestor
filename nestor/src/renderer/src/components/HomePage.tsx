@@ -1,8 +1,11 @@
-import React, { useMemo } from 'react'
-import { motion } from 'framer-motion'
+import React, { useMemo, useState, useEffect, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '../store/useStore'
 import NestorLogo from './NestorLogo'
-import type { NavSection } from '@shared/types'
+import DuplicateFinder from './DuplicateFinder'
+import InsightsDashboard from './InsightsDashboard'
+import SavedActionDialog from './SavedActionDialog'
+import type { NavSection, SavedAction } from '@shared/types'
 
 function getGreeting(): string {
   const h = new Date().getHours()
@@ -51,11 +54,10 @@ const QUICK_ACTIONS = [
       </svg>
     ),
     label: 'Duplikate löschen',
-    prompt: 'Ich glaube ich habe doppelte Dateien. Kannst du mir helfen, sie zu finden?'
+    action: 'duplicates' as const
   }
 ]
 
-// Stagger container
 const containerVariants = {
   hidden: {},
   visible: { transition: { staggerChildren: 0.07 } }
@@ -126,14 +128,204 @@ function RecentActivity(): React.JSX.Element {
   )
 }
 
-export default function HomePage(): React.JSX.Element {
-  const { setActiveNav } = useStore()
-  const greeting = useMemo(() => getGreeting(), [])
+function SavedActionsSection({ onRun }: { onRun: (prompt: string) => void }): React.JSX.Element {
+  const { savedActions, addSavedAction, updateSavedAction, removeSavedAction, setSavedActions } = useStore()
+  const [showDialog, setShowDialog] = useState(false)
+  const [editing, setEditing] = useState<SavedAction | undefined>(undefined)
+  const [contextMenu, setContextMenu] = useState<{ action: SavedAction; x: number; y: number } | null>(null)
 
-  const goToChat = (prompt?: string): void => {
-    if (prompt) sessionStorage.setItem('nestor_prefill_prompt', prompt)
-    setActiveNav('chat' as NavSection)
+  useEffect(() => {
+    window.nestor.actions.getAll().then(setSavedActions)
+  }, [setSavedActions])
+
+  useEffect(() => {
+    if (!contextMenu) return
+    const close = () => setContextMenu(null)
+    window.addEventListener('click', close)
+    return () => window.removeEventListener('click', close)
+  }, [contextMenu])
+
+  const handleSave = useCallback(async (action: SavedAction) => {
+    if (editing) {
+      await window.nestor.actions.update(action)
+      updateSavedAction(action)
+    } else {
+      await window.nestor.actions.save(action)
+      addSavedAction(action)
+    }
+    setShowDialog(false)
+    setEditing(undefined)
+  }, [editing, addSavedAction, updateSavedAction])
+
+  const handleDelete = useCallback(async (id: string) => {
+    await window.nestor.actions.delete(id)
+    removeSavedAction(id)
+    setContextMenu(null)
+  }, [removeSavedAction])
+
+  if (savedActions.length === 0 && !showDialog) {
+    return (
+      <div>
+        <button
+          onClick={() => setShowDialog(true)}
+          className="flex items-center gap-2 h-9 px-4 rounded-xl border border-dashed border-border-strong text-[13px] text-text-hint transition-colors hover:bg-surface hover:text-text-muted btn-press"
+          style={{ background: 'transparent' }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Erste Schnellaktion anlegen
+        </button>
+        {showDialog && (
+          <SavedActionDialog
+            onSave={handleSave}
+            onClose={() => setShowDialog(false)}
+          />
+        )}
+      </div>
+    )
   }
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        {savedActions.map(a => (
+          <motion.button
+            key={a.id}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            onClick={() => onRun(a.prompt)}
+            onContextMenu={e => { e.preventDefault(); setContextMenu({ action: a, x: e.clientX, y: e.clientY }) }}
+            className="flex items-center gap-3 p-4 rounded-xl border border-border-strong text-left transition-all duration-150 hover:bg-surface card-hover"
+            style={{ background: 'var(--color-bg)' }}
+          >
+            <span className="text-[20px] flex-none">{a.icon}</span>
+            <span className="text-[13.5px] font-medium text-text-secondary truncate">{a.name}</span>
+          </motion.button>
+        ))}
+
+        {/* Add new button */}
+        <motion.button
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={() => { setEditing(undefined); setShowDialog(true) }}
+          className="flex items-center gap-3 p-4 rounded-xl border border-dashed border-border text-left transition-all duration-150 hover:bg-surface hover:border-border-strong"
+          style={{ background: 'transparent' }}
+        >
+          <span className="w-8 h-8 rounded-lg border border-dashed border-border flex items-center justify-center flex-none" style={{ background: 'var(--color-surface)' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-hint)" strokeWidth="2" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </span>
+          <span className="text-[13px] text-text-hint">Neue Aktion</span>
+        </motion.button>
+      </div>
+
+      {/* Context menu */}
+      <AnimatePresence>
+        {contextMenu && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.1 }}
+            className="fixed z-50 rounded-xl border border-border-strong shadow-window overflow-hidden py-1"
+            style={{ background: 'var(--color-bg)', left: contextMenu.x, top: contextMenu.y, minWidth: 160 }}
+          >
+            <button
+              onClick={() => { setEditing(contextMenu.action); setShowDialog(true); setContextMenu(null) }}
+              className="w-full flex items-center gap-2.5 px-4 h-9 text-left text-[13px] text-text-secondary hover:bg-surface transition-colors"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+              Bearbeiten
+            </button>
+            <div className="h-px mx-3 my-1" style={{ background: 'var(--color-border)' }} />
+            <button
+              onClick={() => handleDelete(contextMenu.action.id)}
+              className="w-full flex items-center gap-2.5 px-4 h-9 text-left text-[13px] text-[#DC2626] hover:bg-surface transition-colors"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6M14 11v6" /></svg>
+              Löschen
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {showDialog && (
+        <SavedActionDialog
+          initial={editing}
+          onSave={handleSave}
+          onClose={() => { setShowDialog(false); setEditing(undefined) }}
+        />
+      )}
+    </>
+  )
+}
+
+export default function HomePage(): React.JSX.Element {
+  const { setActiveNav, settings, addToast } = useStore()
+  const greeting = useMemo(() => getGreeting(), [])
+  const [showDuplicates, setShowDuplicates] = useState(false)
+  const [showInsights, setShowInsights] = useState(false)
+
+  const goToChat = useCallback((prompt?: string): void => {
+    if (prompt) {
+      sessionStorage.setItem('nestor_prefill_prompt', prompt)
+      // If Chat is already mounted, notify via event
+      window.dispatchEvent(new CustomEvent('nestor:prefill-chat', { detail: { message: prompt } }))
+    }
+    setActiveNav('chat' as NavSection)
+  }, [setActiveNav])
+
+  const handleQuickAction = useCallback((a: typeof QUICK_ACTIONS[0]) => {
+    if ('action' in a && a.action === 'duplicates') {
+      setShowDuplicates(true)
+    } else if ('prompt' in a) {
+      goToChat(a.prompt)
+    }
+  }, [goToChat])
+
+  const handleInsightsChat = useCallback((prompt: string) => {
+    setShowInsights(false)
+    goToChat(prompt)
+  }, [goToChat, setShowInsights])
+
+  useEffect(() => {
+    if (!settings?.rootFolder || !settings?.onboardingComplete) return
+    const key = 'nestor_storage_insight_shown'
+    if (localStorage.getItem(key)) return
+
+    const check = async () => {
+      try {
+        const folders = await window.nestor.app.getSpecialFolders()
+        const insight = await window.nestor.fs.analyzeStorage(settings!.rootFolder, folders.downloads)
+        if (!insight) return
+
+        const hints: string[] = []
+        if (insight.totalSize > 2 * 1024 * 1024 * 1024) {
+          const mb = (insight.totalSize / 1024 / 1024).toFixed(0)
+          hints.push(`Dein Ordner ist ${mb} MB groß`)
+        }
+        if (insight.oldFiles > 0) {
+          hints.push(`${insight.oldFiles} Dateien älter als 6 Monate`)
+        }
+        if (insight.downloadsFileCount > 50) {
+          hints.push(`Downloads enthält ${insight.downloadsFileCount} Dateien`)
+        }
+
+        if (hints.length > 0) {
+          addToast({
+            type: 'info',
+            duration: 8000,
+            message: `${hints[0]}${hints.length > 1 ? ` · ${hints.length - 1} weitere Hinweise` : ''}`
+          })
+          localStorage.setItem(key, '1')
+        }
+      } catch {}
+    }
+
+    check()
+  }, [settings?.rootFolder, settings?.onboardingComplete, addToast])
 
   return (
     <div className="flex-1 overflow-y-auto" style={{ background: 'var(--color-bg)' }}>
@@ -144,13 +336,29 @@ export default function HomePage(): React.JSX.Element {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-          className="flex items-center gap-4 mb-10"
+          className="flex items-center justify-between gap-4 mb-10"
         >
-          <NestorLogo size={36} />
-          <div>
-            <h1 className="text-[22px] font-semibold text-text-primary tracking-tight">{greeting}</h1>
-            <p className="text-[13.5px] text-text-faint mt-0.5">Was möchtest du heute organisieren?</p>
+          <div className="flex items-center gap-4">
+            <NestorLogo size={36} />
+            <div>
+              <h1 className="text-[22px] font-semibold text-text-primary tracking-tight">{greeting}</h1>
+              <p className="text-[13.5px] text-text-faint mt-0.5">Was möchtest du heute organisieren?</p>
+            </div>
           </div>
+
+          {/* Insights badge */}
+          {settings?.rootFolder && (
+            <button
+              onClick={() => setShowInsights(true)}
+              className="flex items-center gap-2 h-8 px-3.5 rounded-xl border border-border-strong text-[12.5px] font-medium text-text-muted transition-all hover:bg-surface hover:text-text-primary btn-press flex-none"
+              style={{ background: 'var(--color-surface)' }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
+              </svg>
+              Analyse
+            </button>
+          )}
         </motion.div>
 
         {/* Quick actions */}
@@ -168,7 +376,7 @@ export default function HomePage(): React.JSX.Element {
               <motion.button
                 key={a.label}
                 variants={itemVariants}
-                onClick={() => goToChat(a.prompt)}
+                onClick={() => handleQuickAction(a)}
                 className="flex items-center gap-3 p-4 rounded-xl border border-border-strong text-left transition-all duration-150 hover:bg-surface hover:border-[var(--color-border-strong)] card-hover"
                 style={{ background: 'var(--color-bg)' }}
               >
@@ -179,6 +387,19 @@ export default function HomePage(): React.JSX.Element {
               </motion.button>
             ))}
           </div>
+        </motion.section>
+
+        {/* Saved quick actions */}
+        <motion.section
+          className="mb-10"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08, duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+        >
+          <h2 className="text-[12.5px] font-semibold text-text-hint uppercase tracking-wider mb-3">
+            Meine Schnellaktionen
+          </h2>
+          <SavedActionsSection onRun={goToChat} />
         </motion.section>
 
         {/* Recently accessed files */}
@@ -214,6 +435,14 @@ export default function HomePage(): React.JSX.Element {
         </motion.section>
 
       </div>
+
+      {/* Modals */}
+      <AnimatePresence>
+        {showDuplicates && <DuplicateFinder onClose={() => setShowDuplicates(false)} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showInsights && <InsightsDashboard onClose={() => setShowInsights(false)} onOpenChat={handleInsightsChat} />}
+      </AnimatePresence>
     </div>
   )
 }

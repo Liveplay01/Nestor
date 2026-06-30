@@ -17,6 +17,8 @@ import ErrorBoundary from './components/ErrorBoundary'
 const HomePage = lazy(() => import('./components/HomePage'))
 const Explorer = lazy(() => import('./components/Explorer'))
 const SettingsPage = lazy(() => import('./components/SettingsPage'))
+const AutomationsPage = lazy(() => import('./components/AutomationsPage'))
+const FullTextSearch = lazy(() => import('./components/FullTextSearch'))
 
 const panelVariants = {
   visible: { width: 'auto', opacity: 1 },
@@ -35,6 +37,7 @@ export default function App(): React.JSX.Element {
   const [showTour, setShowTour] = useState(false)
   const [showPalette, setShowPalette] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
+  const [showFullTextSearch, setShowFullTextSearch] = useState(false)
 
   useEffect(() => {
     window.nestor.settings.get().then((s) => setSettings(s))
@@ -99,6 +102,7 @@ export default function App(): React.JSX.Element {
       const ctrl = e.ctrlKey || e.metaKey
       if (!ctrl) return
       if (e.key === 'p' || e.key === 'P') { e.preventDefault(); setShowPalette((v) => !v) }
+      else if ((e.key === 'f' || e.key === 'F') && e.shiftKey) { e.preventDefault(); setShowFullTextSearch((v) => !v) }
       else if (e.key === '1') { e.preventDefault(); setActiveNav('home') }
       else if (e.key === '2') { e.preventDefault(); setActiveNav('files') }
       else if (e.key === '3') { e.preventDefault(); setActiveNav('chat') }
@@ -149,6 +153,11 @@ export default function App(): React.JSX.Element {
       <ToastContainer />
       <HelpModal open={showHelp} onClose={() => setShowHelp(false)} />
       <CommandPalette open={showPalette} onClose={() => setShowPalette(false)} />
+      {showFullTextSearch && (
+        <Suspense fallback={null}>
+          <FullTextSearch onClose={() => setShowFullTextSearch(false)} />
+        </Suspense>
+      )}
       <TitleBar />
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <Sidebar onHelpClick={() => setShowHelp(true)} />
@@ -171,6 +180,9 @@ export default function App(): React.JSX.Element {
             )}
             {activeNav === 'settings' && (
               <Suspense fallback={null}><SettingsPage /></Suspense>
+            )}
+            {activeNav === 'automations' && (
+              <Suspense fallback={null}><AutomationsPage /></Suspense>
             )}
             {activeNav === 'chat' && (
               <>

@@ -181,7 +181,7 @@ const mdComponents: React.ComponentProps<typeof ReactMarkdown>['components'] = {
 }
 
 // Memoized — only re-renders when this specific message changes
-const MessageBubble = memo(function MessageBubble({ msg, onAnchor }: { msg: Message; onAnchor: (m: Message) => void }): React.JSX.Element {
+const MessageBubble = memo(function MessageBubble({ msg, onAnchor, onCopy }: { msg: Message; onAnchor: (m: Message) => void; onCopy: (m: Message) => void }): React.JSX.Element {
   if (msg.role === 'user') {
     return (
       <motion.div
@@ -195,6 +195,27 @@ const MessageBubble = memo(function MessageBubble({ msg, onAnchor }: { msg: Mess
           style={{ maxWidth: '80%', background: 'var(--color-surface)', padding: '10px 15px', borderRadius: '16px 16px 5px 16px', border: '1px solid var(--color-border-strong)' }}
         >
           {msg.text}
+        </div>
+      </motion.div>
+    )
+  }
+
+  // Tool result messages: compact monospace output box
+  if (msg.isToolResult) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+        className="ml-[39px]"
+      >
+        <div
+          className="rounded-lg px-3.5 py-2.5 text-[12px] font-mono leading-[1.55] text-text-muted overflow-x-auto"
+          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+        >
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+            {msg.text}
+          </ReactMarkdown>
         </div>
       </motion.div>
     )
@@ -221,6 +242,16 @@ const MessageBubble = memo(function MessageBubble({ msg, onAnchor }: { msg: Mess
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path d="M6 3.5h12a.5.5 0 0 1 .5.5v16l-6.5-4.3L5.5 20V4a.5.5 0 0 1 .5-.5z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => onCopy(msg)}
+            className="opacity-0 group-hover:opacity-100 transition-opacity text-text-hint hover:text-accent btn-press"
+            title="Kopieren"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
             </svg>
           </button>
         </div>
@@ -258,15 +289,15 @@ const MessageBubble = memo(function MessageBubble({ msg, onAnchor }: { msg: Mess
   )
 })
 
-// ─── Streaming Bubble — DOM-direct, zero store updates per token ───────────
+// ─── Streaming Bubble — Markdown rendered during token stream ──────────────
 
-function StreamingBubble({ msg, textDomRef }: { msg: Message; textDomRef: React.RefObject<HTMLDivElement | null> }): React.JSX.Element {
+function StreamingBubble({ text, onCopy }: { text: string; onCopy: () => void }): React.JSX.Element {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-      className="flex gap-3"
+      className="flex gap-3 group"
     >
       <div className="flex-none" style={{ width: 27, height: 27 }}>
         <NestorLogo size={27} />
@@ -274,12 +305,22 @@ function StreamingBubble({ msg, textDomRef }: { msg: Message; textDomRef: React.
       <div className="flex-1 min-w-0 pt-px">
         <div className="flex items-center gap-2 mb-1.5">
           <span className="text-[13px] font-semibold text-text-primary">Nestor</span>
-          {msg.time && <span className="text-[11.5px] text-text-hint">{msg.time}</span>}
+          <button
+            onClick={onCopy}
+            className="opacity-0 group-hover:opacity-100 transition-opacity text-text-hint hover:text-accent btn-press"
+            title="Kopieren"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          </button>
         </div>
-        <div
-          ref={textDomRef}
-          className="text-[14px] leading-[1.65] text-text-secondary whitespace-pre-wrap"
-        />
+        <div className="text-[14px] leading-[1.65] text-text-secondary">
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+            {text || ''}
+          </ReactMarkdown>
+        </div>
         <span className="streaming-cursor" />
       </div>
     </motion.div>
@@ -379,6 +420,31 @@ function describeAction(a: PendingAction): { label: string; accent: string; icon
       accent: '#DC2626',
       icon: <svg {...iconProps}><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
     }
+    case 'read_file': return {
+      label: `Datei lesen: ${basename(a.path)}`,
+      accent: '#0891B2',
+      icon: <svg {...iconProps}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+    }
+    case 'write_file': return {
+      label: `Datei schreiben: ${basename(a.path)}`,
+      accent: '#059669',
+      icon: <svg {...iconProps}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6M9 15l3 3 3-3"/></svg>
+    }
+    case 'copy_file': return {
+      label: `Kopieren: ${basename(a.from ?? a.path)} → ${basename(a.to ?? '')}`,
+      accent: '#7C3AED',
+      icon: <svg {...iconProps}><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    }
+    case 'list_dir': return {
+      label: `Ordner auflisten: ${basename(a.path)}`,
+      accent: '#CA8A04',
+      icon: <svg {...iconProps}><path d="M3 7.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8.5A1.5 1.5 0 0 1 20.5 9.5V17a1.5 1.5 0 0 1-1.5 1.5H4.5A1.5 1.5 0 0 1 3 17V7.5z"/></svg>
+    }
+    case 'search_files': return {
+      label: `Suchen: ${a.query}`,
+      accent: '#6B7280',
+      icon: <svg {...iconProps}><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+    }
     default: return {
       label: `${a.tool}: ${basename(a.path ?? a.from ?? '')}`,
       accent: '#6B7280',
@@ -395,24 +461,29 @@ export default function Chat(): React.JSX.Element {
     isTyping, setTyping, chatTitle, setChatTitle, chatStartTime, setChatStartTime,
     setFilesInContext, settings, addHistoryItem, addAnchor, addAccessedFile,
     fileTree, showFileTree, setShowFileTree, showActivityLog, setShowActivityLog,
-    addToast
+    addToast, accessedFiles, history
   } = useStore()
 
   const [input, setInput] = useState('')
   const [streamingId, setStreamingId] = useState<string | null>(null)
+  const [streamingText, setStreamingText] = useState('')
   const [aiStatus, setAiStatus] = useState<AiStatus>('red')
   const [contextFiles, setContextFiles] = useState<ContextFile[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
   const [atQuery, setAtQuery] = useState<string | null>(null)
   const [atStartIdx, setAtStartIdx] = useState(-1)
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([])
+  const [agentMode, setAgentMode] = useState(false)
+  const [agentIteration, setAgentIteration] = useState(0)
+  const agentStopRef = useRef(false)
+  const agentModeRef = useRef(false)
+  const agentIterRef = useRef(0)
 
   const msgRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Streaming: accumulates tokens without touching React/Zustand state
   const streamingTextRef = useRef('')
-  const streamingDomRef = useRef<HTMLDivElement | null>(null)
   const rafRef = useRef<number | null>(null)
 
   const allFiles = flattenTree(fileTree)
@@ -486,6 +557,9 @@ export default function Chat(): React.JSX.Element {
     return () => clearInterval(id)
   }, [settings?.aiMode, settings?.apiKey, settings?.model])
 
+  // Keep agentModeRef in sync so the onDone closure always sees current value
+  useEffect(() => { agentModeRef.current = agentMode }, [agentMode])
+
   // Auto-scroll: on messages change or when streaming starts
   useEffect(() => {
     const el = msgRef.current
@@ -493,7 +567,8 @@ export default function Chat(): React.JSX.Element {
   }, [messages, isTyping])
 
   // IPC stream handlers — tokens go directly to DOM via RAF, zero store updates
-  const executeActions = useCallback(async (actions: Record<string, string>[]) => {
+  const executeActions = useCallback(async (actions: Record<string, string>[]): Promise<boolean> => {
+    let hadToolResult = false
     for (const action of actions) {
       try {
         let item: HistoryItem | undefined
@@ -513,9 +588,42 @@ export default function Chat(): React.JSX.Element {
           const name = action.path.split(/[/\\]/).pop() ?? action.path
           addToast({ type: 'info', message: `In Papierkorb: ${name}` })
         } else if (action.tool === 'read_file' && action.path) {
-          await window.nestor.fs.readFile(action.path)
+          const content = await window.nestor.fs.readFile(action.path)
           const name = action.path.split(/[/\\]/).pop() ?? action.path
           addAccessedFile({ name, path: action.path, color: getFileColor(name), accessedAt: Date.now() })
+          addMessage({
+            id: randomId(), role: 'ai',
+            text: `📄 **${name}**\n\`\`\`\n${content.slice(0, 3000)}${content.length > 3000 ? '\n…(gekürzt)' : ''}\n\`\`\``,
+            isToolResult: true, time: formatTime(new Date())
+          })
+          hadToolResult = true
+        } else if (action.tool === 'write_file' && action.path && action.content !== undefined) {
+          await window.nestor.fs.writeFile(action.path, action.content)
+          const name = action.path.split(/[/\\]/).pop() ?? action.path
+          addToast({ type: 'success', message: `Datei geschrieben: ${name}` })
+        } else if (action.tool === 'copy_file' && action.from && action.to) {
+          item = await window.nestor.fs.copyFile(action.from, action.to)
+          const name = action.from.split(/[/\\]/).pop() ?? action.from
+          addToast({ type: 'success', message: `Kopiert: ${name}` })
+        } else if (action.tool === 'list_dir' && action.path) {
+          const entries = await window.nestor.fs.listDir(action.path)
+          const name = action.path.split(/[/\\]/).pop() ?? action.path
+          const lines = entries.map(e => `${e.isFolder ? '📁' : '📄'} ${e.name}`).join('\n')
+          addMessage({
+            id: randomId(), role: 'ai',
+            text: `📁 **${name}/** (${entries.length} Einträge)\n\`\`\`\n${lines}\n\`\`\``,
+            isToolResult: true, time: formatTime(new Date())
+          })
+          hadToolResult = true
+        } else if (action.tool === 'search_files' && action.query) {
+          const results = await window.nestor.fs.search(action.query)
+          const lines = results.slice(0, 20).map(e => e.path).join('\n')
+          addMessage({
+            id: randomId(), role: 'ai',
+            text: `🔍 **Suchergebnisse für „${action.query}"** (${results.length} Treffer)\n\`\`\`\n${lines || '(keine Treffer)'}\n\`\`\``,
+            isToolResult: true, time: formatTime(new Date())
+          })
+          hadToolResult = true
         }
         if (item) addHistoryItem(item)
       } catch (e) {
@@ -523,7 +631,8 @@ export default function Chat(): React.JSX.Element {
         addToast({ type: 'error', message: 'Aktion fehlgeschlagen. Bitte erneut versuchen.' })
       }
     }
-  }, [addHistoryItem, addAccessedFile, addToast])
+    return hadToolResult
+  }, [addHistoryItem, addAccessedFile, addToast, addMessage])
 
   useEffect(() => {
     const currentStreamId = { val: '' }
@@ -531,15 +640,11 @@ export default function Chat(): React.JSX.Element {
     const unToken = window.nestor.ollama.onToken((token) => {
       if (!currentStreamId.val) return
       streamingTextRef.current += token
-      // Batch DOM updates to animation frames — smooth and efficient
       if (rafRef.current === null) {
         rafRef.current = requestAnimationFrame(() => {
-          if (streamingDomRef.current) {
-            streamingDomRef.current.textContent = streamingTextRef.current
-            // Keep scroll pinned to bottom while streaming
-            const el = msgRef.current
-            if (el) el.scrollTop = el.scrollHeight
-          }
+          setStreamingText(streamingTextRef.current)
+          const el = msgRef.current
+          if (el) el.scrollTop = el.scrollHeight
           rafRef.current = null
         })
       }
@@ -558,18 +663,67 @@ export default function Chat(): React.JSX.Element {
 
       const { clean, actions } = parseActions(finalText)
       finalizeMessage(sid, actions.length > 0 ? clean : finalText)
-      if (actions.length > 0) {
-        setPendingActions(actions)
-      }
 
       setTyping(false)
       setStreamingId(null)
       currentStreamId.val = ''
-      // Persist after each complete AI response so a crash doesn't erase the conversation
+
+      // Persist after each complete AI response
       try {
         const msgs = useStore.getState().messages
         if (msgs.length > 0) localStorage.setItem('nestor_chat_v1', JSON.stringify(msgs))
       } catch { /* non-fatal */ }
+
+      if (actions.length > 0) {
+        const currentAgentMode = agentModeRef.current
+        const safeActions = actions.filter(a => a.tool !== 'delete_file')
+        const dangerActions = actions.filter(a => a.tool === 'delete_file')
+
+        if (currentAgentMode && safeActions.length > 0 && !agentStopRef.current && agentIterRef.current < 8) {
+          // Agentic mode: auto-execute safe actions
+          agentIterRef.current += 1
+          setAgentIteration(agentIterRef.current)
+          if (dangerActions.length > 0) setPendingActions(dangerActions)
+          setTimeout(async () => {
+            if (agentStopRef.current) return
+            const hadResult = await executeActions(safeActions)
+            if (hadResult && !agentStopRef.current && agentIterRef.current < 8) {
+              // Feed results back to AI
+              const storeState = useStore.getState()
+              const history = storeState.messages
+                .filter((m) => !m.isStreaming && m.text)
+                .map((m) => ({ role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant', content: m.text }))
+              const { settings: s, fileTree: ft, accessedFiles: af, history: h } = storeState
+              const sp = buildSystemPrompt(s?.rootFolder ?? undefined, ft, {
+                accessedFiles: af.slice(0, 5),
+                recentActions: h.slice(0, 5).map(x => ({ verb: x.verb, target: x.target, time: x.time }))
+              })
+              setTyping(true)
+              const aiId = randomId()
+              addMessage({ id: aiId, role: 'ai', text: '', time: formatTime(new Date()), isStreaming: true })
+              setStreamingId(aiId)
+              setStreamingText('')
+              streamingTextRef.current = ''
+              ;(window as { __nestorSetStreamId?: (id: string) => void }).__nestorSetStreamId?.(aiId)
+              currentStreamId.val = aiId
+              await window.nestor.ollama.chat(history, sp, s?.model)
+            } else if (!hadResult) {
+              agentIterRef.current = 0
+              setAgentIteration(0)
+            }
+          }, 800)
+        } else {
+          setPendingActions(actions)
+          if (currentAgentMode) {
+            agentIterRef.current = 0
+            setAgentIteration(0)
+          }
+        }
+      } else {
+        // No actions: reset agent iteration counter
+        agentIterRef.current = 0
+        setAgentIteration(0)
+      }
     })
 
     const unError = window.nestor.ollama.onError((err) => {
@@ -620,14 +774,19 @@ export default function Chat(): React.JSX.Element {
     const aiId = randomId()
     addMessage({ id: aiId, role: 'ai', text: '', time: formatTime(new Date()), isStreaming: true })
     setStreamingId(aiId)
+    setStreamingText('')
+    streamingTextRef.current = ''
     ;(window as { __nestorSetStreamId?: (id: string) => void }).__nestorSetStreamId?.(aiId)
 
     const history = useStore.getState().messages
       .filter((m) => !m.isStreaming && m.text)
       .map((m) => ({ role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant', content: m.text }))
 
-    const topLevelNames = fileTree.flatMap((e) => [e.name])
-    const systemPrompt = buildSystemPrompt(settings?.rootFolder ?? undefined, topLevelNames)
+    const storeState = useStore.getState()
+    const systemPrompt = buildSystemPrompt(settings?.rootFolder ?? undefined, fileTree, {
+      accessedFiles: storeState.accessedFiles.slice(0, 5),
+      recentActions: storeState.history.slice(0, 5).map(h => ({ verb: h.verb, target: h.target, time: h.time }))
+    })
     await window.nestor.ollama.chat([...history, { role: 'user' as const, content: messageContent }], systemPrompt, settings?.model)
   }, [isTyping, chatStartTime, addMessage, setTyping, setChatStartTime, setChatTitle, settings?.model, setFilesInContext, contextFiles, fileTree, settings?.rootFolder])
 
@@ -779,6 +938,34 @@ export default function Chat(): React.JSX.Element {
             </button>
           )}
 
+          {/* Agentic Mode Toggle */}
+          {agentIteration > 0 ? (
+            <button
+              onClick={() => { agentStopRef.current = true; agentIterRef.current = 0; setAgentIteration(0) }}
+              className="btn-press flex items-center gap-1.5 h-[29px] px-3 border rounded-md text-[12.5px] font-medium transition-colors duration-150"
+              style={{ background: '#FEF3C7', color: '#92400E', borderColor: '#FCD34D' }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+              Agent: {agentIteration}/8
+            </button>
+          ) : (
+            <button
+              onClick={() => { setAgentMode(m => !m); agentStopRef.current = false }}
+              title={agentMode ? 'Vollautomatik deaktivieren' : 'Vollautomatik aktivieren – KI führt sichere Aktionen automatisch aus und arbeitet weiter'}
+              className="btn-press flex items-center gap-1.5 h-[29px] px-3 border rounded-md text-[12.5px] font-medium transition-colors duration-150"
+              style={{
+                background: agentMode ? 'rgba(37,99,235,0.08)' : 'var(--color-bg)',
+                color: agentMode ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                borderColor: agentMode ? 'var(--color-accent)' : 'var(--color-border-strong)'
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill={agentMode ? 'var(--color-accent)' : 'none'} stroke={agentMode ? 'var(--color-accent)' : 'currentColor'} strokeWidth="2" strokeLinecap="round">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
+              {agentMode ? 'Auto' : 'Auto'}
+            </button>
+          )}
+
           {/* New Chat */}
           <button
             onClick={() => { clearMessages(); localStorage.removeItem('nestor_chat_v1') }}
@@ -850,8 +1037,8 @@ export default function Chat(): React.JSX.Element {
           <div className="max-w-[760px] mx-auto px-7 flex flex-col gap-[26px]">
             {messages.map((msg) =>
               msg.id === streamingId
-                ? <StreamingBubble key={msg.id} msg={msg} textDomRef={streamingDomRef} />
-                : <MessageBubble key={msg.id} msg={msg} onAnchor={handleAnchor} />
+                ? <StreamingBubble key={msg.id} text={streamingText} onCopy={() => { navigator.clipboard.writeText(streamingTextRef.current); addToast({ type: 'success', message: 'Kopiert' }) }} />
+                : <MessageBubble key={msg.id} msg={msg} onAnchor={handleAnchor} onCopy={(m) => { navigator.clipboard.writeText(m.text); addToast({ type: 'success', message: 'Kopiert' }) }} />
             )}
             {isTyping && !streamingId && (
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3 items-center">
@@ -1038,6 +1225,19 @@ export default function Chat(): React.JSX.Element {
               </span>
             )}
           </div>
+
+          {/* KI-Kontext Banner */}
+          {settings?.rootFolder && (fileTree.length > 0 || accessedFiles.length > 0 || history.length > 0) && (
+            <div className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] text-text-hint select-none">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-none opacity-60">
+                <circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" />
+              </svg>
+              <span>KI kennt:</span>
+              {fileTree.length > 0 && <span className="font-medium text-text-muted">{fileTree.length} Dateien</span>}
+              {history.length > 0 && <><span className="opacity-40">·</span><span className="font-medium text-text-muted">{Math.min(history.length, 5)} letzte Aktionen</span></>}
+              {accessedFiles.length > 0 && <><span className="opacity-40">·</span><span className="font-medium text-text-muted">{Math.min(accessedFiles.length, 5)} zuletzt geöffnet</span></>}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useStore } from '../store/useStore'
-import type { AiMode, Theme } from '@shared/types'
+import type { AiMode, Theme, SavedAction } from '@shared/types'
+import SavedActionDialog from './SavedActionDialog'
 
 const ACCENT_PRESETS = [
   '#2563EB', // blue
@@ -53,11 +54,14 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
 }
 
 export default function SettingsPage(): React.JSX.Element {
-  const { settings, patchSettings } = useStore()
+  const { settings, patchSettings, savedActions, setSavedActions, updateSavedAction, removeSavedAction } = useStore()
+  const [workspaces, setWorkspaces] = useState<string[]>([])
   const [version, setVersion] = useState('')
   const [ollamaStatus, setOllamaStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle')
   const [apiStatus, setApiStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle')
   const [apiStatusMsg, setApiStatusMsg] = useState('')
+  const [editingAction, setEditingAction] = useState<SavedAction | undefined>(undefined)
+  const [showActionDialog, setShowActionDialog] = useState(false)
   const [models, setModels] = useState<string[]>([])
   const [launchAtStartup, setLaunchAtStartup] = useState(false)
   const [clearConfirm, setClearConfirm] = useState(false)
@@ -69,7 +73,12 @@ export default function SettingsPage(): React.JSX.Element {
     window.nestor.app.getVersion().then(setVersion).catch(() => {})
     window.nestor.app.getStartup().then(setLaunchAtStartup).catch(() => {})
     window.nestor.app.getUninstallInfo().then(setUninstallInfo).catch(() => {})
-  }, [])
+    window.nestor.actions.getAll().then(setSavedActions).catch(() => {})
+  }, [setSavedActions])
+
+  useEffect(() => {
+    setWorkspaces(settings?.workspaces ?? [])
+  }, [settings?.workspaces])
 
   useEffect(() => {
     if (settings?.aiMode === 'local') {
@@ -109,6 +118,20 @@ export default function SettingsPage(): React.JSX.Element {
   const selectFolder = async () => {
     const folder = await window.nestor.settings.selectFolder()
     if (folder) save({ rootFolder: folder })
+  }
+
+  const addWorkspace = async () => {
+    const result = await window.nestor.app.addWorkspace()
+    if (result) {
+      setWorkspaces(result.workspaces)
+      patchSettings({ rootFolder: result.rootFolder, workspaces: result.workspaces })
+    }
+  }
+
+  const removeWorkspace = async (folderPath: string) => {
+    const result = await window.nestor.app.removeWorkspace(folderPath)
+    setWorkspaces(result.workspaces)
+    patchSettings({ rootFolder: result.rootFolder, workspaces: result.workspaces })
   }
 
   const exportData = async () => {
@@ -153,11 +176,11 @@ export default function SettingsPage(): React.JSX.Element {
                   key={mode ?? 'none'}
                   onClick={() => save({ aiMode: mode })}
                   className="h-7 px-3.5 rounded-md text-[12.5px] font-medium transition-all duration-150 flex items-center gap-1.5 btn-ghost"
-                  style={
-                    settings.aiMode === mode
-                      ? { background: '#2563EB', color: '#fff' }
-                      : { color: 'var(--color-text-muted)' }
-                  }
+                   style={
+                     settings.aiMode === mode
+                       ? { background: 'var(--color-accent)', color: '#fff' }
+                       : { color: 'var(--color-text-muted)' }
+                   }
                 >
                   {mode === 'local' ? 'Lokal (Ollama)' : 'Externe API'}
                   {mode === 'local' && (
@@ -275,11 +298,11 @@ export default function SettingsPage(): React.JSX.Element {
                     document.documentElement.setAttribute('data-theme', t)
                   }}
                   className="h-7 px-3.5 rounded-md text-[12.5px] font-medium transition-all duration-150 btn-ghost"
-                  style={
-                    settings.theme === t
-                      ? { background: '#2563EB', color: '#fff' }
-                      : { color: 'var(--color-text-muted)' }
-                  }
+                   style={
+                     settings.theme === t
+                       ? { background: 'var(--color-accent)', color: '#fff' }
+                       : { color: 'var(--color-text-muted)' }
+                   }
                 >
                   {t === 'light' ? 'Hell' : 'Dunkel'}
                 </button>
@@ -318,6 +341,58 @@ export default function SettingsPage(): React.JSX.Element {
           </Row>
         </Section>
 
+        {/* Keyboard Shortcuts */}
+        <Section title="Tastenkürzel">
+          <div className="px-5 py-3">
+            <p className="text-[12.5px] text-text-hint mb-4">Alle Tastenkürzel in Nestor auf einen Blick.</p>
+            <div className="grid grid-cols-2 gap-x-8 gap-y-0">
+              {([
+                ['Navigation', [
+                  [['Strg', 'P'], 'Befehlspalette öffnen'],
+                  [['Strg', '⇧', 'F'], 'Volltext-Suche'],
+                  [['Strg', '1'], 'Zur Übersicht'],
+                  [['Strg', '2'], 'Zum Datei-Explorer'],
+                  [['Strg', '3'], 'Zum KI-Chat'],
+                  [['Strg', '4'], 'Zu Einstellungen'],
+                  [['Strg', 'B'], 'Dateibaum ein-/ausblenden'],
+                ]],
+                ['Chat & Aktionen', [
+                  [['Strg', 'N'], 'Neuen Chat starten'],
+                  [['Strg', 'Z'], 'Letzte Aktion rückgängig'],
+                  [['Enter'], 'Nachricht senden'],
+                  [['@'], 'Datei als Kontext einfügen'],
+                  [['Esc'], 'Auswahl / Dialog schließen'],
+                  [['Strg', 'Klick'], 'Datei zur Stapelauswahl'],
+                ]],
+              ] as [string, [string[], string][]][]).map(([group, shortcuts]) => (
+                <div key={group}>
+                  <div className="text-[11px] font-semibold text-text-hint uppercase tracking-wider mb-2.5">{group}</div>
+                  <div className="flex flex-col gap-1.5 mb-5">
+                    {shortcuts.map(([keys, desc]) => (
+                      <div key={desc} className="flex items-center justify-between gap-4">
+                        <span className="text-[12.5px] text-text-muted flex-1">{desc}</span>
+                        <div className="flex items-center gap-1 flex-none">
+                          {keys.map((k, i) => (
+                            <React.Fragment key={i}>
+                              {i > 0 && <span className="text-[10px] text-text-hint">+</span>}
+                              <kbd
+                                className="inline-flex items-center justify-center px-1.5 py-0.5 text-[11px] font-mono font-medium rounded text-text-muted"
+                                style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border-strong)', boxShadow: '0 1px 0 var(--color-border-strong)', minWidth: 22, lineHeight: '1.6' }}
+                              >
+                                {k}
+                              </kbd>
+                            </React.Fragment>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Section>
+
         {/* Files & Folders */}
         <Section title="Dateien & Ordner">
           <Row label="Wurzelordner" hint={settings.rootFolder || 'Kein Ordner ausgewählt'}>
@@ -337,6 +412,101 @@ export default function SettingsPage(): React.JSX.Element {
           </Row>
         </Section>
 
+        {/* Workspaces */}
+        <Section title="Arbeitsbereiche">
+          {workspaces.length === 0 ? (
+            <div className="px-5 py-4 text-[13px] text-text-faint">
+              Noch kein Arbeitsbereich gespeichert. Füge deinen ersten Ordner hinzu.
+            </div>
+          ) : (
+            workspaces.map(ws => {
+              const name = ws.split(/[/\\]/).pop()
+              const isActive = ws === settings.rootFolder
+              return (
+                <Row
+                  key={ws}
+                  label={name ?? ws}
+                  hint={isActive ? `Aktiver Arbeitsbereich · ${ws}` : ws}
+                >
+                  <div className="flex items-center gap-2">
+                    {isActive && (
+                      <span
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                        style={{ background: 'var(--color-accent)', color: '#fff' }}
+                      >
+                        Aktiv
+                      </span>
+                    )}
+                    <button
+                      onClick={() => removeWorkspace(ws)}
+                      className="h-8 px-3 rounded-lg border border-border-strong text-[12.5px] transition-colors hover:bg-surface"
+                      style={{ background: 'var(--color-bg)', color: '#DC2626' }}
+                    >
+                      Entfernen
+                    </button>
+                  </div>
+                </Row>
+              )
+            })
+          )}
+          <div className="px-5 py-3">
+            <button
+              onClick={addWorkspace}
+              disabled={workspaces.length >= 5}
+              className="flex items-center gap-2 h-8 px-4 rounded-lg border border-border-strong text-[12.5px] font-medium transition-colors hover:bg-surface disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background: 'var(--color-bg)', color: 'var(--color-accent)' }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              {workspaces.length >= 5 ? 'Max. 5 Arbeitsbereiche' : 'Ordner hinzufügen'}
+            </button>
+          </div>
+        </Section>
+
+        {/* Saved Actions */}
+        <Section title="Meine Schnellaktionen">
+          {savedActions.length === 0 ? (
+            <div className="px-5 py-4 text-[13px] text-text-faint">
+              Noch keine Schnellaktionen erstellt. Erstelle sie über die Startseite.
+            </div>
+          ) : (
+            savedActions.map(a => (
+              <Row key={a.id} label={`${a.icon} ${a.name}`}>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setEditingAction(a); setShowActionDialog(true) }}
+                    className="h-8 px-3 rounded-lg border border-border-strong text-[12.5px] text-text-muted transition-colors hover:bg-surface"
+                    style={{ background: 'var(--color-bg)' }}
+                  >
+                    Bearbeiten
+                  </button>
+                  <button
+                    onClick={async () => { await window.nestor.actions.delete(a.id); removeSavedAction(a.id) }}
+                    className="h-8 px-3 rounded-lg border border-border-strong text-[12.5px] transition-colors hover:bg-surface"
+                    style={{ background: 'var(--color-bg)', color: '#DC2626' }}
+                  >
+                    Löschen
+                  </button>
+                </div>
+              </Row>
+            ))
+          )}
+        </Section>
+
+        {showActionDialog && (
+          <SavedActionDialog
+            initial={editingAction}
+            onSave={async (action) => {
+              await window.nestor.actions.update(action)
+              updateSavedAction(action)
+              setShowActionDialog(false)
+              setEditingAction(undefined)
+            }}
+            onClose={() => { setShowActionDialog(false); setEditingAction(undefined) }}
+          />
+        )}
+
         {/* System */}
         <Section title="System">
           <Row
@@ -349,6 +519,15 @@ export default function SettingsPage(): React.JSX.Element {
                 setLaunchAtStartup(v)
                 window.nestor.app.setStartup(v)
               }}
+            />
+          </Row>
+          <Row
+            label="Im Tray minimieren"
+            hint="Beim Schließen bleibt Nestor im System Tray aktiv — über das Icon in der Taskleiste erreichbar."
+          >
+            <Toggle
+              value={settings.minimizeToTray ?? false}
+              onChange={(v) => save({ minimizeToTray: v })}
             />
           </Row>
         </Section>

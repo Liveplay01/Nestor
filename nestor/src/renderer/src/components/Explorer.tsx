@@ -3,7 +3,14 @@ import { motion } from 'framer-motion'
 import { useStore } from '../store/useStore'
 import { getFileColor } from '../lib/fileColors'
 import { ConfirmDialog, PromptDialog } from './Dialog'
+import BatchRenameModal from './BatchRenameModal'
 import type { FileEntry } from '@shared/types'
+
+const TAG_COLORS = ['#2563EB', '#16A34A', '#CA8A04', '#DC2626', '#7C3AED', '#0891B2']
+function tagColor(tag: string): string {
+  let h = 0; for (let i = 0; i < tag.length; i++) h = ((h << 5) - h + tag.charCodeAt(i)) | 0
+  return TAG_COLORS[Math.abs(h) % TAG_COLORS.length]
+}
 
 // ─── Context Menu ──────────────────────────────────────────────────────────
 
@@ -460,7 +467,7 @@ function Preview({ entry }: { entry: FileEntry | null }): React.JSX.Element {
 // ─── Explorer ──────────────────────────────────────────────────────────────
 
 export default function Explorer(): React.JSX.Element {
-  const { settings, addHistoryItem, addToast } = useStore()
+  const { settings, addHistoryItem, addToast, selectedFiles, toggleFileSelection, clearFileSelection, fileTags, setFileTags, setTagsForFile, fileTree } = useStore()
   const rootFolder = settings?.rootFolder ?? ''
 
   type DialogState =
@@ -478,24 +485,75 @@ export default function Explorer(): React.JSX.Element {
   const [clipboard, setClipboard] = useState<{ entry: FileEntry; cut: boolean } | null>(null)
   const [loading, setLoading] = useState(false)
   const [dialog, setDialog] = useState<DialogState>(null)
+  const [hasMore, setHasMore] = useState(false)
+  const [dragOverPath, setDragOverPath] = useState<string | null>(null)
+  const [showBatchRename, setShowBatchRename] = useState(false)
+  const [tagInput, setTagInput] = useState('')
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([])
+  const [activeTagFile, setActiveTagFile] = useState<string | null>(null)
+  const [tagFilter, setTagFilter] = useState<string | null>(null)
+  const [showTagFilter, setShowTagFilter] = useState(false)
+  const [showExportMenu, setShowExportMenu] = useState(false)
+  const tagInputRef = useRef<HTMLInputElement>(null)
+  const exportMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showExportMenu) return
+    const handler = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) setShowExportMenu(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showExportMenu])
+
+  useEffect(() => {
+    window.nestor.tags.getAll().then(setFileTags).catch(() => {})
+    window.nestor.tags.getAllNames().then(setTagSuggestions).catch(() => {})
+  }, [setFileTags])
 
   const loadEntries = useCallback(async (path: string) => {
     if (!path) return
     setLoading(true)
+    setHasMore(false)
     try {
-      const result = await window.nestor.fs.listDir(path)
+      const result = await window.nestor.fs.listDir(path, 0, 3, 200, 0)
       setEntries(result)
+      setHasMore(result.length === 200)
     } catch {
       setEntries([])
+      setHasMore(false)
     } finally {
       setLoading(false)
     }
   }, [])
 
+  const loadMore = async () => {
+    if (!currentPath) return
+    setLoading(true)
+    try {
+      const result = await window.nestor.fs.listDir(currentPath, 0, 3, 200, entries.length)
+      setEntries(prev => [...prev, ...result])
+      setHasMore(result.length === 200)
+    } catch {
+      setHasMore(false)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     setCurrentPath(rootFolder)
     setBreadcrumb([])
-  }, [rootFolder])
+    clearFileSelection()
+  }, [rootFolder, clearFileSelection])
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { clearFileSelection(); setActiveTagFile(null) }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [clearFileSelection])
 
   useEffect(() => {
     if (currentPath) loadEntries(currentPath)
@@ -598,13 +656,152 @@ export default function Explorer(): React.JSX.Element {
     loadEntries(currentPath)
   }
 
-  const sortedEntries = [...entries].sort((a, b) => {
-    if (a.isFolder && !b.isFolder) return -1
-    if (!a.isFolder && b.isFolder) return 1
-    return a.name.localeCompare(b.name)
-  })
+  const sortedEntries = [...entries]
+    .sort((a, b) => {
+      if (a.isFolder && !b.isFolder) return -1
+      if (!a.isFolder && b.isFolder) return 1
+      return a.name.localeCompare(b.name)
+    })
+    .filter(e => {
+      if (!tagFilter) return true
+      return (fileTags[e.path] ?? []).includes(tagFilter)
+    })
+
+  const handleDragStart = (e: React.DragEvent, entry: FileEntry) => {
+    e.dataTransfer.setData('nestor/file', JSON.stringify({ name: entry.name, path: entry.path, color: getFileColor(entry.name) }))
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e: React.DragEvent, entry: FileEntry) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (entry.isFolder) {
+      setDragOverPath(entry.path)
+    }
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    const related = e.relatedTarget as Node | null
+    if (!related || !e.currentTarget.contains(related)) {
+      setDragOverPath(null)
+    }
+  }
+
+  const handleDrop = async (e: React.DragEvent, targetEntry: FileEntry) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOverPath(null)
+
+    if (!targetEntry.isFolder) return
+
+    const data = e.dataTransfer.getData('nestor/file')
+    if (!data) return
+
+    try {
+      const file = JSON.parse(data) as { name: string; path: string; color: string }
+      if (file.path === targetEntry.path) return
+      const dest = `${targetEntry.path}/${file.name}`
+      if (file.path === dest) return
+      const item = await window.nestor.fs.moveFile(file.path, dest)
+      if (item) addHistoryItem(item)
+      loadEntries(currentPath)
+      addToast({ type: 'success', message: `"${file.name}" verschoben` })
+    } catch {
+      addToast({ type: 'error', message: 'Verschieben fehlgeschlagen' })
+    }
+  }
+
+  const addTagToFile = async (filePath: string, tag: string): Promise<void> => {
+    const trimmed = tag.trim().toLowerCase()
+    if (!trimmed) return
+    const current = fileTags[filePath] ?? []
+    if (current.includes(trimmed)) return
+    const updated = [...current, trimmed]
+    await window.nestor.tags.setFileTags(filePath, updated)
+    setTagsForFile(filePath, updated)
+    if (!tagSuggestions.includes(trimmed)) setTagSuggestions(prev => [...prev, trimmed].sort())
+  }
+
+  const removeTagFromFile = async (filePath: string, tag: string): Promise<void> => {
+    const current = fileTags[filePath] ?? []
+    const updated = current.filter(t => t !== tag)
+    await window.nestor.tags.setFileTags(filePath, updated)
+    setTagsForFile(filePath, updated)
+  }
+
+  const allTagNames = [...new Set(Object.values(fileTags).flat())].sort()
 
   const rootName = rootFolder.split(/[/\\]/).pop() ?? 'Ordner'
+
+  function buildTextTree(items: FileEntry[], indent = ''): string {
+    return items.map((e, i) => {
+      const last = i === items.length - 1
+      const pre = last ? '└── ' : '├── '
+      const childIndent = indent + (last ? '    ' : '│   ')
+      const line = `${indent}${pre}${e.name}${e.isFolder ? '/' : ''}`
+      return e.isFolder && e.children ? line + '\n' + buildTextTree(e.children, childIndent) : line
+    }).join('\n')
+  }
+
+  function flatFiles(items: FileEntry[], out: FileEntry[] = []): FileEntry[] {
+    for (const e of items) {
+      if (!e.isFolder) out.push(e)
+      if (e.children) flatFiles(e.children, out)
+    }
+    return out
+  }
+
+  function countTree(items: FileEntry[]): { files: number; folders: number } {
+    let files = 0, folders = 0
+    for (const e of items) {
+      if (e.isFolder) { folders++; if (e.children) { const c = countTree(e.children); files += c.files; folders += c.folders } }
+      else files++
+    }
+    return { files, folders }
+  }
+
+  const doExport = async (format: 'txt' | 'csv' | 'html') => {
+    setShowExportMenu(false)
+    const name = rootName
+    let content = '', defaultName = '', filters: { name: string; extensions: string[] }[] = []
+
+    if (format === 'txt') {
+      content = `${name}/\n${buildTextTree(fileTree)}`
+      defaultName = `${name}_Struktur.txt`
+      filters = [{ name: 'Textdatei', extensions: ['txt'] }]
+    } else if (format === 'csv') {
+      const rows = ['Name,Pfad,Typ,Tags']
+      for (const f of flatFiles(fileTree)) {
+        const tags = (fileTags[f.path] ?? []).join('; ')
+        rows.push(`"${f.name.replace(/"/g,'""')}","${f.path.replace(/"/g,'""')}","${f.type}","${tags}"`)
+      }
+      content = rows.join('\n')
+      defaultName = `${name}_Dateiliste.csv`
+      filters = [{ name: 'CSV-Datei', extensions: ['csv'] }]
+    } else {
+      const all = flatFiles(fileTree)
+      const { files: fc, folders: fld } = countTree(fileTree)
+      const allTags = [...new Set(all.flatMap(f => fileTags[f.path] ?? []))]
+      const tagCloud = allTags.map(t => `<span style="display:inline-block;margin:2px;padding:3px 8px;background:#EEF2FF;color:#3730A3;border-radius:12px;font-size:12px">${t}</span>`).join('')
+      const rows = all.slice(0, 500).map(f => {
+        const tags = (fileTags[f.path] ?? []).join(', ')
+        return `<tr><td>${f.name}</td><td style="color:#6B7280;font-size:12px">${f.path}</td><td>${tags}</td></tr>`
+      }).join('\n')
+      content = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>${name} – Nestor Bericht</title>
+<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;padding:32px;background:#F9FAFB;color:#111827}h1{font-size:22px;font-weight:700;margin-bottom:4px}.sub{color:#6B7280;margin-bottom:24px;font-size:14px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:28px}.stat{background:#fff;border:1px solid #E5E7EB;border-radius:10px;padding:14px 18px}.stat-n{font-size:24px;font-weight:700;color:#2563EB}.stat-l{font-size:12px;color:#6B7280;margin-top:2px}h2{font-size:15px;font-weight:600;margin:24px 0 10px}table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #E5E7EB;border-radius:8px;overflow:hidden}th{background:#F3F4F6;text-align:left;padding:8px 12px;font-size:12px;color:#6B7280;font-weight:600}td{padding:7px 12px;font-size:13px;border-top:1px solid #F3F4F6}tr:hover td{background:#F9FAFB}.footer{margin-top:32px;font-size:11px;color:#9CA3AF}</style></head>
+<body><h1>${name}</h1><div class="sub">Nestor Bericht · ${new Date().toLocaleDateString('de-DE',{day:'2-digit',month:'long',year:'numeric'})}</div>
+<div class="stats"><div class="stat"><div class="stat-n">${fc}</div><div class="stat-l">Dateien</div></div><div class="stat"><div class="stat-n">${fld}</div><div class="stat-l">Ordner</div></div><div class="stat"><div class="stat-n">${allTags.length}</div><div class="stat-l">Tags</div></div></div>
+${allTags.length > 0 ? `<h2>Tags</h2><div style="margin-bottom:24px">${tagCloud}</div>` : ''}
+<h2>Dateien (${all.length > 500 ? 'erste 500 von ' + all.length : all.length})</h2>
+<table><tr><th>Name</th><th>Pfad</th><th>Tags</th></tr>${rows}</table>
+<div class="footer">Erstellt mit Nestor · ${new Date().toLocaleString('de-DE')}</div></body></html>`
+      defaultName = `${name}_Bericht.html`
+      filters = [{ name: 'HTML-Datei', extensions: ['html'] }]
+    }
+
+    const result = await window.nestor.app.saveExport(content, defaultName, filters)
+    if (result) addToast({ type: 'success', message: `Exportiert: ${defaultName}` })
+  }
 
   return (
     <div
@@ -639,15 +836,107 @@ export default function Explorer(): React.JSX.Element {
 
         {/* Toolbar */}
         <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border">
-          <button
-            onClick={handlePaste}
-            disabled={!clipboard}
-            title="Einfügen"
-            className="h-7 px-2.5 rounded text-[11.5px] font-medium text-text-muted transition-all duration-150 btn-ghost disabled:opacity-40"
-          >
-            Einfügen
-          </button>
+          {selectedFiles.size > 0 ? (
+            <>
+              <span className="text-[11.5px] text-text-hint">{selectedFiles.size} ausgewählt</span>
+              <button
+                onClick={() => setShowBatchRename(true)}
+                className="h-7 px-2.5 rounded text-[11.5px] font-medium transition-all duration-150"
+                style={{ background: 'var(--color-accent)', color: '#fff' }}
+              >
+                Stapelumbenennen
+              </button>
+              <button
+                onClick={clearFileSelection}
+                className="h-7 px-2 rounded text-[11.5px] text-text-muted btn-ghost"
+              >
+                Auswahl aufheben
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={handlePaste}
+              disabled={!clipboard}
+              title="Einfügen"
+              className="h-7 px-2.5 rounded text-[11.5px] font-medium text-text-muted transition-all duration-150 btn-ghost disabled:opacity-40"
+            >
+              Einfügen
+            </button>
+          )}
           <div className="flex-1" />
+          {/* Tag-Filter */}
+          {allTagNames.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setShowTagFilter(v => !v)}
+                title="Nach Tag filtern"
+                className="flex items-center gap-1 h-7 px-2 rounded text-[11.5px] btn-ghost transition-colors"
+                style={{ color: tagFilter ? 'var(--color-accent)' : 'var(--color-text-faint)' }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>
+                {tagFilter ? tagFilter : ''}
+              </button>
+              {showTagFilter && (
+                <div
+                  className="absolute right-0 top-8 z-50 rounded-lg border border-border-strong shadow-window py-1 min-w-[140px]"
+                  style={{ background: 'var(--color-bg)' }}
+                >
+                  <button
+                    onClick={() => { setTagFilter(null); setShowTagFilter(false) }}
+                    className="w-full text-left px-3 h-8 text-[12.5px] text-text-muted hover:bg-surface"
+                  >
+                    Alle anzeigen
+                  </button>
+                  {allTagNames.map(tag => (
+                    <button
+                      key={tag}
+                      onClick={() => { setTagFilter(tag); setShowTagFilter(false) }}
+                      className="w-full text-left px-3 h-8 text-[12.5px] hover:bg-surface flex items-center gap-2"
+                    >
+                      <span className="w-2 h-2 rounded-full flex-none" style={{ background: tagColor(tag) }} />
+                      <span style={{ color: tagFilter === tag ? 'var(--color-accent)' : 'var(--color-text-muted)' }}>{tag}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {/* Export dropdown */}
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              onClick={() => setShowExportMenu(v => !v)}
+              title="Exportieren"
+              className="flex items-center gap-1 h-7 px-2 rounded gutter-hover text-text-faint transition-colors text-[11.5px] font-medium"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Export
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            {showExportMenu && (
+              <div
+                className="absolute right-0 top-full mt-1 z-50 py-1 rounded-lg border border-border-strong shadow-window min-w-[180px]"
+                style={{ background: 'var(--color-bg)' }}
+              >
+                {([
+                  ['txt', 'Ordnerstruktur (.txt)', '0 0 24 24', 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M8 13h8 M8 17h5'],
+                  ['csv', 'Dateiliste (.csv)', '0 0 24 24', 'M3 3h18M3 9h18M3 15h18M3 21h18'],
+                  ['html', 'Bericht (.html)', '0 0 24 24', 'M2 12l5-7v4h10V5l5 7-5 7v-4H7v4z'],
+                ] as [string, string, string, string][]).map(([fmt, label, vb, d]) => (
+                  <button
+                    key={fmt}
+                    onClick={() => doExport(fmt as 'txt' | 'csv' | 'html')}
+                    className="w-full text-left flex items-center gap-2.5 px-3.5 h-[32px] text-[12.5px] text-text-muted transition-colors hover:bg-surface"
+                  >
+                    <svg width="13" height="13" viewBox={vb} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+                      {d.split(' M').map((seg, i) => <path key={i} d={(i === 0 ? seg : 'M' + seg)} />)}
+                    </svg>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button
             onClick={() => loadEntries(currentPath)}
             title="Aktualisieren"
@@ -671,44 +960,98 @@ export default function Explorer(): React.JSX.Element {
           ) : sortedEntries.length === 0 ? (
             <div className="text-[12.5px] text-text-hint text-center py-8">Leer</div>
           ) : (
-            sortedEntries.map((entry) => (
+            sortedEntries.map((entry) => {
+              const isSelected = selectedFiles.has(entry.path)
+              const tags = fileTags[entry.path] ?? []
+              return (
               <div
                 key={entry.path}
-                onClick={() => {
+                draggable={!isSelected}
+                onDragStart={(e) => handleDragStart(e, entry)}
+                onClick={(e) => {
+                  if (e.ctrlKey || e.metaKey) {
+                    if (!entry.isFolder) toggleFileSelection(entry.path)
+                    return
+                  }
                   setSelected(entry)
+                  if (selectedFiles.size > 0) clearFileSelection()
                   if (entry.isFolder) navigate(entry.path, entry.name)
                 }}
                 onContextMenu={(e) => {
                   e.preventDefault()
                   setCtxMenu({ x: e.clientX, y: e.clientY, entry })
                 }}
-              className={`flex items-center gap-2.5 px-3 h-8 cursor-pointer transition-colors duration-100 btn-ghost rounded-md ${
-                selected?.path === entry.path
-                  ? 'bg-accent/[0.08] text-text-primary'
-                  : 'text-text-muted'
-              }`}
+                onDragOver={(e) => handleDragOver(e, entry)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, entry)}
+                className={`flex items-center gap-2.5 px-3 py-1 cursor-pointer transition-colors duration-100 btn-ghost rounded-md ${
+                  isSelected
+                    ? 'bg-accent/[0.10] text-text-primary'
+                    : selected?.path === entry.path
+                    ? 'bg-accent/[0.08] text-text-primary'
+                    : 'text-text-muted'
+                } ${dragOverPath === entry.path ? 'bg-accent/[0.12]' : ''}`}
+                style={{ minHeight: 32 }}
               >
-                <FileIcon entry={entry} />
-                {renaming === entry.path ? (
-                  <input
-                    autoFocus
-                    value={renameValue}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') submitRename()
-                      if (e.key === 'Escape') setRenaming(null)
-                      e.stopPropagation()
+                {selectedFiles.size > 0 && !entry.isFolder && (
+                  <div
+                    className="flex-none w-4 h-4 rounded border flex items-center justify-center"
+                    style={{
+                      borderColor: isSelected ? 'var(--color-accent)' : 'var(--color-border-strong)',
+                      background: isSelected ? 'var(--color-accent)' : 'transparent'
                     }}
-                    onBlur={submitRename}
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex-1 min-w-0 text-[12.5px] border border-accent rounded px-1 outline-none"
-                    style={{ background: 'var(--color-bg)', color: 'var(--color-text-primary)' }}
-                  />
-                ) : (
-                  <span className="flex-1 min-w-0 truncate text-[12.5px]">{entry.name}</span>
+                  >
+                    {isSelected && (
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>
+                    )}
+                  </div>
                 )}
+                <FileIcon entry={entry} />
+                <div className="flex-1 min-w-0">
+                  {renaming === entry.path ? (
+                    <input
+                      autoFocus
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') submitRename()
+                        if (e.key === 'Escape') setRenaming(null)
+                        e.stopPropagation()
+                      }}
+                      onBlur={submitRename}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full text-[12.5px] border border-accent rounded px-1 outline-none"
+                      style={{ background: 'var(--color-bg)', color: 'var(--color-text-primary)' }}
+                    />
+                  ) : (
+                    <span className="block truncate text-[12.5px]">{entry.name}</span>
+                  )}
+                  {tags.length > 0 && (
+                    <div className="flex gap-1 flex-wrap mt-0.5">
+                      {tags.map(tag => (
+                        <span
+                          key={tag}
+                          className="text-[10px] px-1.5 py-px rounded-full font-medium text-white leading-none"
+                          style={{ background: tagColor(tag) }}
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            ))
+            )})
+          )}
+          {hasMore && !loading && (
+            <div className="flex items-center justify-center py-2">
+              <button
+                onClick={loadMore}
+                className="h-7 px-3 rounded text-[11.5px] font-medium text-text-muted transition-colors hover:bg-surface btn-ghost"
+              >
+                Mehr laden ({entries.length})
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -720,20 +1063,79 @@ export default function Explorer(): React.JSX.Element {
       >
         {/* Preview header */}
         {selected && (
-          <div className="flex items-center gap-3 px-5 border-b border-border" style={{ height: 40, minHeight: 40 }}>
-            <FileIcon entry={selected} />
-            <span className="text-[13px] font-medium text-text-primary">{selected.name}</span>
-            <div className="flex-1" />
-            <button
-              onClick={() => window.nestor.shell.openPath(selected.path)}
-              className="text-[12px] text-text-muted hover:text-text-primary transition-colors"
-            >
-              Öffnen
-            </button>
+          <div className="flex flex-col border-b border-border">
+            <div className="flex items-center gap-3 px-5" style={{ height: 40, minHeight: 40 }}>
+              <FileIcon entry={selected} />
+              <span className="text-[13px] font-medium text-text-primary flex-1 min-w-0 truncate">{selected.name}</span>
+              <button
+                onClick={() => window.nestor.shell.openPath(selected.path)}
+                className="text-[12px] text-text-muted hover:text-text-primary transition-colors flex-none"
+              >
+                Öffnen
+              </button>
+            </div>
+            {!selected.isFolder && (
+              <div className="flex flex-wrap items-center gap-1.5 px-5 pb-2">
+                {(fileTags[selected.path] ?? []).map(tag => (
+                  <button
+                    key={tag}
+                    onClick={() => removeTagFromFile(selected.path, tag)}
+                    className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium text-white leading-none transition-opacity hover:opacity-75"
+                    style={{ background: tagColor(tag) }}
+                    title="Klicken zum Entfernen"
+                  >
+                    {tag}
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                  </button>
+                ))}
+                {activeTagFile === selected.path ? (
+                  <div className="relative flex items-center">
+                    <input
+                      ref={tagInputRef}
+                      autoFocus
+                      value={tagInput}
+                      onChange={e => setTagInput(e.target.value)}
+                      onKeyDown={async (e) => {
+                        if (e.key === 'Enter') {
+                          await addTagToFile(selected.path, tagInput)
+                          setTagInput('')
+                          setActiveTagFile(null)
+                        }
+                        if (e.key === 'Escape') { setTagInput(''); setActiveTagFile(null) }
+                      }}
+                      onBlur={() => { setTagInput(''); setActiveTagFile(null) }}
+                      list="tag-suggestions"
+                      placeholder="Tag eingeben…"
+                      className="h-6 px-2 rounded-full border border-accent text-[11px] outline-none w-32"
+                      style={{ background: 'var(--color-bg)', color: 'var(--color-text-primary)' }}
+                    />
+                    <datalist id="tag-suggestions">
+                      {tagSuggestions.map(t => <option key={t} value={t} />)}
+                    </datalist>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setActiveTagFile(selected.path)}
+                    className="text-[11px] px-2 py-0.5 rounded-full border border-dashed border-border-strong text-text-hint hover:border-accent hover:text-accent transition-colors"
+                  >
+                    + Tag
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
         <Preview entry={selected} />
       </div>
+
+      {/* Batch Rename Modal */}
+      {showBatchRename && (
+        <BatchRenameModal
+          files={sortedEntries.filter(e => selectedFiles.has(e.path))}
+          onClose={() => setShowBatchRename(false)}
+          onDone={() => { clearFileSelection(); loadEntries(currentPath) }}
+        />
+      )}
 
       {/* Context menu */}
       {ctxMenu && (

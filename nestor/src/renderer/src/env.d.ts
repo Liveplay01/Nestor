@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { Settings, FileEntry, HistoryItem, OllamaStatus, OllamaChatMessage } from '../../shared/types'
+import type { Settings, FileEntry, HistoryItem, OllamaStatus, OllamaChatMessage, DuplicateGroup, FolderStats, SavedAction, StorageInsight, SearchResult, AutomationRule, FileTagsMap } from '../../shared/types'
 
 interface NestorAPI {
   window: {
@@ -15,7 +15,7 @@ interface NestorAPI {
     selectFolder: () => Promise<string | null>
   }
   fs: {
-    listDir: (path: string) => Promise<FileEntry[]>
+    listDir: (path: string, limit?: number, offset?: number) => Promise<FileEntry[]>
     readFile: (path: string) => Promise<string>
     createFolder: (path: string) => Promise<HistoryItem>
     copyFile: (from: string, to: string) => Promise<HistoryItem>
@@ -29,6 +29,22 @@ interface NestorAPI {
     writeFile: (path: string, content: string) => Promise<void>
     createFile: (path: string) => Promise<HistoryItem>
     onChanged: (cb: (rootPath: string) => void) => () => void
+    findDuplicates: () => Promise<DuplicateGroup[]>
+    analyzeFolder: () => Promise<FolderStats | null>
+    analyzeStorage: (rootFolder: string, downloadsPath: string) => Promise<StorageInsight | null>
+    searchFullText: (query: string) => Promise<SearchResult[]>
+    batchRename: (renames: { from: string; newName: string }[]) => Promise<HistoryItem[]>
+  }
+  tags: {
+    getAll: () => Promise<FileTagsMap>
+    setFileTags: (filePath: string, tags: string[]) => Promise<void>
+    getAllNames: () => Promise<string[]>
+  }
+  actions: {
+    getAll: () => Promise<SavedAction[]>
+    save: (action: SavedAction) => Promise<void>
+    update: (action: SavedAction) => Promise<void>
+    delete: (id: string) => Promise<void>
   }
   shell: {
     openPath: (path: string) => Promise<string>
@@ -42,8 +58,12 @@ interface NestorAPI {
     setStartup: (enabled: boolean) => Promise<void>
     exportData: () => Promise<string>
     clearData: () => Promise<void>
+    saveExport: (content: string, defaultName: string, filters: { name: string; extensions: string[] }[]) => Promise<string | false>
     getUninstallInfo: () => Promise<{ nestorFound: boolean; ollamaFound: boolean; isDev: boolean }>
     uninstall: (opts: { uninstallOllama: boolean }) => Promise<void>
+    addWorkspace: () => Promise<{ workspaces: string[]; rootFolder: string } | null>
+    removeWorkspace: (folderPath: string) => Promise<{ workspaces: string[]; rootFolder: string }>
+    switchWorkspace: (folderPath: string) => Promise<string>
   }
   ollama: {
     check: () => Promise<OllamaStatus>
@@ -74,6 +94,14 @@ interface NestorAPI {
   }
   lifecycle: {
     onBeforeQuit: (cb: () => void) => () => void
+  }
+  automations: {
+    getAll: () => Promise<AutomationRule[]>
+    save: (rule: AutomationRule) => Promise<void>
+    update: (rule: AutomationRule) => Promise<void>
+    delete: (id: string) => Promise<void>
+    runNow: (id: string) => Promise<{ ok: boolean; label: string }>
+    onCompleted: (cb: (payload: { id: string; result: string }) => void) => () => void
   }
 }
 
