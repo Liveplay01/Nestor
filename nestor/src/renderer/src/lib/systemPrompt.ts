@@ -10,6 +10,12 @@ LESE- UND SUCH-AKTIONEN (sofort sicher):
 - Datei lesen:            <action>{"tool":"read_file","path":"C:/Pfad/zur/Datei.txt"}</action>
 - Dateien suchen:         <action>{"tool":"search_files","query":"suchbegriff"}</action>
 
+TAG-AKTIONEN (sofort sicher, kein Bestätigung nötig):
+- Tags einer Datei lesen:  <action>{"tool":"get_tags","path":"C:/Pfad/datei.pdf"}</action>
+- Tags einer Datei setzen: <action>{"tool":"set_tags","path":"C:/Pfad/datei.pdf","tags":["arbeit","2024","wichtig"]}</action>
+  → tags ist ein JSON-Array aus Strings. Leeres Array [] entfernt alle Tags.
+  → Existierende Tags werden KOMPLETT ERSETZT. Um Tags hinzuzufügen, erst get_tags aufrufen.
+
 SCHREIB-AKTIONEN (Benutzer bestätigt):
 - Ordner erstellen:  <action>{"tool":"create_folder","path":"C:/Pfad/NeuerOrdner"}</action>
 - Datei erstellen/schreiben: <action>{"tool":"write_file","path":"C:/Pfad/datei.txt","content":"Dateiinhalt hier..."}</action>
@@ -43,6 +49,8 @@ export interface ExtendedContext {
   accessedFiles?: { name: string; path: string; accessedAt: number }[]
   recentActions?: { verb: string; target: string; time: string }[]
   stats?: PromptStats
+  existingTags?: string[]
+  taggedFiles?: { path: string; tags: string[] }[]
 }
 
 function buildTreeForPrompt(entries: FileEntry[], depth = 0, maxDepth = 3, maxEntries = 500): string {
@@ -104,10 +112,22 @@ export function buildSystemPrompt(rootFolder?: string, fileTree?: FileEntry[], c
     actionsSection = `\nLETZTE AKTIONEN: ${actions}`
   }
 
+  let tagsSection = ''
+  if (ctx?.existingTags && ctx.existingTags.length > 0) {
+    tagsSection = `\nVORHANDENE TAGS: ${ctx.existingTags.join(', ')}`
+  }
+  if (ctx?.taggedFiles && ctx.taggedFiles.length > 0) {
+    const lines = ctx.taggedFiles.slice(0, 20).map(f => {
+      const name = f.path.split(/[/\\]/).pop() ?? f.path
+      return `  ${name}: [${f.tags.join(', ')}]`
+    }).join('\n')
+    tagsSection += `\nGETAGGTE DATEIEN:\n${lines}`
+  }
+
   return `${BASE_PROMPT}
 
 AKTUELLER ARBEITSORDNER: ${rootFolder}
-INHALT (bis Tiefe ${3}): ${list}${statsSection}${recentSection}${actionsSection}`
+INHALT (bis Tiefe ${3}): ${list}${statsSection}${recentSection}${actionsSection}${tagsSection}`
 }
 
 export const SYSTEM_PROMPT = BASE_PROMPT

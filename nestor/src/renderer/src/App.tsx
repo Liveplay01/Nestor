@@ -195,7 +195,7 @@ export default function App(): React.JSX.Element {
                       exit="hidden"
                       variants={panelVariants}
                       transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-                      style={{ overflow: 'hidden', flexShrink: 0 }}
+                      style={{ overflow: 'hidden', flexShrink: 0, display: 'flex', alignSelf: 'stretch' }}
                     >
                       <FileTree />
                     </motion.div>

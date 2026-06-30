@@ -14,6 +14,22 @@ const FAQ = [
     a: 'Lokal läuft alles auf deinem PC – privat & kostenlos, kein Internet nötig. API ist schneller, schickt aber Texte an externe Server.'
   },
   {
+    q: 'Wie füge ich Dateien zum Chat hinzu?',
+    a: 'Tippe @ im Chat und wähle eine Datei aus dem Baum. Du kannst Dateien auch per Drag & Drop aus dem Explorer in den Chat ziehen.'
+  },
+  {
+    q: 'Wie kopiere ich eine AI-Antwort?',
+    a: 'Fahre mit der Maus über die Antwort – oben rechts erscheint ein Kopier-Symbol. Klicke es, um den Text in die Zwischenablage zu kopieren.'
+  },
+  {
+    q: 'Was bedeutet die Analyse?',
+    a: 'Auf der Startseite zeigt dir Nestor automatisch Hinweise zu großem/ungenutzten Ordnern. Klicke darauf, um eine detaillierte Analyse im Chat zu erhalten.'
+  },
+  {
+    q: 'Wie verschiebe ich Dateien im Explorer?',
+    a: 'Ziehe eine Datei oder einen Ordner auf einen anderen Ordner im Explorer. Der Zielordner wird blau markiert und die Datei wird verschoben.'
+  },
+  {
     q: 'Wo finde ich meine Dateien?',
     a: 'Klicke auf "Dateien" in der linken Leiste. Den überwachten Ordner kannst du in den Einstellungen ändern.'
   },
@@ -41,12 +57,12 @@ export function HelpIcon({ onClick }: { onClick: () => void }): React.JSX.Elemen
           <path d="M12 17h.01" />
         </svg>
       </span>
-      <span
-        className="relative z-10 text-[9.5px] font-medium leading-none transition-colors duration-150"
-        style={{ color: 'var(--color-text-hint)' }}
-      >
-        FAQ
-      </span>
+        <span
+          className="relative z-10 text-[11px] font-medium leading-none transition-colors duration-150"
+          style={{ color: 'var(--color-text-hint)' }}
+        >
+          FAQ
+        </span>
     </button>
   )
 }

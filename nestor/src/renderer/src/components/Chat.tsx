@@ -445,6 +445,16 @@ function describeAction(a: PendingAction): { label: string; accent: string; icon
       accent: '#6B7280',
       icon: <svg {...iconProps}><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
     }
+    case 'get_tags': return {
+      label: `Tags lesen: ${basename(a.path)}`,
+      accent: '#0891B2',
+      icon: <svg {...iconProps}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+    }
+    case 'set_tags': return {
+      label: `Tags setzen: ${basename(a.path)}`,
+      accent: '#7C3AED',
+      icon: <svg {...iconProps}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+    }
     default: return {
       label: `${a.tool}: ${basename(a.path ?? a.from ?? '')}`,
       accent: '#6B7280',
@@ -461,7 +471,7 @@ export default function Chat(): React.JSX.Element {
     isTyping, setTyping, chatTitle, setChatTitle, chatStartTime, setChatStartTime,
     setFilesInContext, settings, addHistoryItem, addAnchor, addAccessedFile,
     fileTree, showFileTree, setShowFileTree, showActivityLog, setShowActivityLog,
-    addToast, accessedFiles, history
+    addToast, accessedFiles, history, fileTags
   } = useStore()
 
   const [input, setInput] = useState('')
@@ -624,6 +634,34 @@ export default function Chat(): React.JSX.Element {
             isToolResult: true, time: formatTime(new Date())
           })
           hadToolResult = true
+        } else if (action.tool === 'get_tags' && action.path) {
+          const allTags = await window.nestor.tags.getAll()
+          const filePath = action.path as string
+          const tags: string[] = (allTags[filePath] as string[] | undefined) ?? []
+          const name = filePath.split(/[/\\]/).pop() ?? filePath
+          addMessage({
+            id: randomId(), role: 'ai',
+            text: `🏷️ **Tags von ${name}:** ${tags.length > 0 ? tags.join(', ') : '(keine Tags)'}`,
+            isToolResult: true, time: formatTime(new Date())
+          })
+          hadToolResult = true
+        } else if (action.tool === 'set_tags' && action.path) {
+          const filePath = action.path as string
+          const rawTags = action.tags
+          const tags: string[] = Array.isArray(rawTags)
+            ? (rawTags as unknown as string[])
+            : typeof rawTags === 'string'
+              ? (rawTags as string).split(',').map((t: string) => t.trim()).filter(Boolean)
+              : []
+          await window.nestor.tags.setFileTags(filePath, tags)
+          const name = filePath.split(/[/\\]/).pop() ?? filePath
+          addMessage({
+            id: randomId(), role: 'ai',
+            text: `🏷️ **Tags gesetzt:** ${name}\n→ ${tags.length > 0 ? tags.join(', ') : '(keine Tags — alle entfernt)'}`,
+            isToolResult: true, time: formatTime(new Date())
+          })
+          hadToolResult = true
+          addToast({ type: 'success', message: `Tags aktualisiert: ${name}` })
         }
         if (item) addHistoryItem(item)
       } catch (e) {
@@ -693,10 +731,13 @@ export default function Chat(): React.JSX.Element {
               const history = storeState.messages
                 .filter((m) => !m.isStreaming && m.text)
                 .map((m) => ({ role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant', content: m.text }))
-              const { settings: s, fileTree: ft, accessedFiles: af, history: h } = storeState
+              const { settings: s, fileTree: ft, accessedFiles: af, history: h, fileTags: ft2 } = storeState
+              const tagEntries = Object.entries(ft2 as Record<string, string[]>).filter(([, t]) => (t as string[]).length > 0)
               const sp = buildSystemPrompt(s?.rootFolder ?? undefined, ft, {
                 accessedFiles: af.slice(0, 5),
-                recentActions: h.slice(0, 5).map(x => ({ verb: x.verb, target: x.target, time: x.time }))
+                recentActions: h.slice(0, 5).map(x => ({ verb: x.verb, target: x.target, time: x.time })),
+                existingTags: [...new Set(tagEntries.flatMap(([, t]) => t as string[]))].slice(0, 30),
+                taggedFiles: tagEntries.slice(0, 20).map(([p, t]) => ({ path: p, tags: t as string[] }))
               })
               setTyping(true)
               const aiId = randomId()
@@ -783,9 +824,12 @@ export default function Chat(): React.JSX.Element {
       .map((m) => ({ role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant', content: m.text }))
 
     const storeState = useStore.getState()
+    const allTagEntries = Object.entries(storeState.fileTags as Record<string, string[]>).filter(([, t]) => (t as string[]).length > 0)
     const systemPrompt = buildSystemPrompt(settings?.rootFolder ?? undefined, fileTree, {
       accessedFiles: storeState.accessedFiles.slice(0, 5),
-      recentActions: storeState.history.slice(0, 5).map(h => ({ verb: h.verb, target: h.target, time: h.time }))
+      recentActions: storeState.history.slice(0, 5).map(h => ({ verb: h.verb, target: h.target, time: h.time })),
+      existingTags: [...new Set(allTagEntries.flatMap(([, t]) => t as string[]))].slice(0, 30),
+      taggedFiles: allTagEntries.slice(0, 20).map(([p, t]) => ({ path: p, tags: t as string[] }))
     })
     await window.nestor.ollama.chat([...history, { role: 'user' as const, content: messageContent }], systemPrompt, settings?.model)
   }, [isTyping, chatStartTime, addMessage, setTyping, setChatStartTime, setChatTitle, settings?.model, setFilesInContext, contextFiles, fileTree, settings?.rootFolder])
@@ -1150,6 +1194,7 @@ export default function Chat(): React.JSX.Element {
                     <button
                       onClick={() => removeContextFile(f.path)}
                       className="flex items-center justify-center w-4 h-4 rounded hover:bg-black/[0.08] transition-colors text-text-hint"
+                      title="Datei entfernen"
                     >
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                         <path d="M6 6l12 12M18 6L6 18" />

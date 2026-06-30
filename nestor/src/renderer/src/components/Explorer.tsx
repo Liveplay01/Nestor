@@ -516,7 +516,7 @@ export default function Explorer(): React.JSX.Element {
     setLoading(true)
     setHasMore(false)
     try {
-      const result = await window.nestor.fs.listDir(path, 0, 3, 200, 0)
+      const result = await window.nestor.fs.listDir(path, 200, 0)
       setEntries(result)
       setHasMore(result.length === 200)
     } catch {
@@ -531,7 +531,7 @@ export default function Explorer(): React.JSX.Element {
     if (!currentPath) return
     setLoading(true)
     try {
-      const result = await window.nestor.fs.listDir(currentPath, 0, 3, 200, entries.length)
+      const result = await window.nestor.fs.listDir(currentPath, 200, entries.length)
       setEntries(prev => [...prev, ...result])
       setHasMore(result.length === 200)
     } catch {

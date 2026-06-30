@@ -196,7 +196,7 @@ export default function FileTree(): React.JSX.Element {
   return (
     <div
       className="flex flex-col border-r border-border bg-surface"
-      style={{ width: 240, minWidth: 240, minHeight: 0 }}
+      style={{ width: 240, minWidth: 240, height: '100%' }}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-[15px] pb-[9px]">
