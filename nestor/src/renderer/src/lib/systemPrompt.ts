@@ -16,13 +16,19 @@ TAG-AKTIONEN (sofort sicher, kein Bestätigung nötig):
   → tags ist ein JSON-Array aus Strings. Leeres Array [] entfernt alle Tags.
   → Existierende Tags werden KOMPLETT ERSETZT. Um Tags hinzuzufügen, erst get_tags aufrufen.
 
-SCHREIB-AKTIONEN (Benutzer bestätigt):
-- Ordner erstellen:  <action>{"tool":"create_folder","path":"C:/Pfad/NeuerOrdner"}</action>
-- Datei erstellen/schreiben: <action>{"tool":"write_file","path":"C:/Pfad/datei.txt","content":"Dateiinhalt hier..."}</action>
-- Datei kopieren:    <action>{"tool":"copy_file","from":"C:/Quelle.pdf","to":"C:/Ziel/Quelle.pdf"}</action>
-- Datei verschieben: <action>{"tool":"move_file","from":"C:/Quelle.pdf","to":"C:/Ziel/Quelle.pdf"}</action>
-- Datei umbenennen:  <action>{"tool":"rename_file","path":"C:/Datei.pdf","newName":"NeuerName.pdf"}</action>
-- Datei löschen (NUR nach expliziter Bestätigung!): <action>{"tool":"delete_file","path":"C:/Datei.pdf"}</action>
+SCHREIB-AKTIONEN (Benutzer bestätigt) – JEDE Schreib-Aktion MUSS zusätzlich "risk" und "reason" enthalten:
+- Ordner erstellen:  <action>{"tool":"create_folder","path":"C:/Pfad/NeuerOrdner","risk":"safe","reason":"..."}</action>
+- Datei erstellen/schreiben: <action>{"tool":"write_file","path":"C:/Pfad/datei.txt","content":"...","risk":"review","reason":"..."}</action>
+- Datei kopieren:    <action>{"tool":"copy_file","from":"C:/Quelle.pdf","to":"C:/Ziel/Quelle.pdf","risk":"safe","reason":"..."}</action>
+- Datei verschieben: <action>{"tool":"move_file","from":"C:/Quelle.pdf","to":"C:/Ziel/Quelle.pdf","risk":"safe","reason":"..."}</action>
+- Datei umbenennen:  <action>{"tool":"rename_file","path":"C:/Datei.pdf","newName":"NeuerName.pdf","risk":"safe","reason":"..."}</action>
+- Datei löschen (NUR nach expliziter Bestätigung!): <action>{"tool":"delete_file","path":"C:/Datei.pdf","risk":"risky","reason":"..."}</action>
+
+RISIKO-EINSTUFUNG ("risk"-Feld, Pflicht bei jeder Schreib-Aktion):
+- "safe": eindeutig harmlos und leicht rückgängig zu machen, z. B. nach Dateityp sortieren, offensichtlichen Tippfehler im Namen korrigieren, leeren Ordner anlegen.
+- "review": sinnvoll, aber der Nutzer sollte kurz draufschauen, z. B. Datei in einen neu erstellten Ordner verschieben, bestehende Datei überschreiben.
+- "risky": schwer/nicht rückgängig zu machen oder folgenreich, z. B. löschen, Pfad nahe Systemordnern, sehr viele Dateien auf einmal.
+"reason" ist EIN kurzer deutscher Satz, der erklärt, WARUM genau diese Aktion für genau diese Datei sinnvoll ist (z. B. "Diese Datei heißt Rechnung_2024.pdf und passt deshalb in den Ordner Rechnungen.").
 
 VERKETTUNG (wichtig für komplexe Aufgaben):
 - Führe erst read_file oder list_dir aus – du siehst das Ergebnis danach im Chat.
@@ -37,7 +43,8 @@ REGELN:
 4. Gib Aktionen als einzelne <action>...</action> Tags aus – mehrere Aktionen = mehrere Tags.
 5. Nutze read_file und list_dir aktiv, um dir vor Schreib-Aktionen ein Bild zu machen.
 6. write_file kann neue Textdateien erstellen oder bestehende überschreiben.
-7. Im Vollautomatik-Modus werden sichere Aktionen automatisch ausgeführt – sei dann besonders präzise.`
+7. Im Vollautomatik-Modus werden nur "safe"-Aktionen automatisch ausgeführt, "review" und "risky" werden IMMER dem Nutzer zur Bestätigung vorgelegt – sei bei der Risiko-Einstufung also besonders ehrlich und nicht zu optimistisch.
+8. Rühre niemals Ordner wie Windows, Programme/Program Files, AppData oder System32 an, selbst wenn sie technisch im Arbeitsordner liegen – stufe solche Vorschläge immer als "risky" ein und weise den Nutzer aktiv darauf hin.`
 
 export interface PromptStats {
   totalFiles: number
@@ -51,6 +58,14 @@ export interface ExtendedContext {
   stats?: PromptStats
   existingTags?: string[]
   taggedFiles?: { path: string; tags: string[] }[]
+  persona?: string
+}
+
+const PERSONA_HINTS: Record<string, string> = {
+  school: 'Der Nutzer verwendet den PC für Schule/Studium – achte besonders auf Hausarbeiten, Skripte, Vorlesungsunterlagen und Abgabefristen im Dateinamen.',
+  photos: 'Der Nutzer sammelt viele Fotos – achte besonders auf Duplikate, unsortierte Bilder und sinnvolle Jahres-/Ereignis-Ordner.',
+  invoices: 'Der Nutzer arbeitet viel mit Rechnungen – achte besonders auf PDF-Dateien mit "Rechnung"/"Invoice" im Namen und schlage einen Rechnungen-Ordner vor.',
+  downloads_only: 'Der Nutzer möchte hauptsächlich nur den Downloads-Ordner aufgeräumt halten – halte Vorschläge einfach und auf Downloads fokussiert.'
 }
 
 function buildTreeForPrompt(entries: FileEntry[], depth = 0, maxDepth = 3, maxEntries = 500): string {
@@ -124,10 +139,15 @@ export function buildSystemPrompt(rootFolder?: string, fileTree?: FileEntry[], c
     tagsSection += `\nGETAGGTE DATEIEN:\n${lines}`
   }
 
+  let personaSection = ''
+  if (ctx?.persona && PERSONA_HINTS[ctx.persona]) {
+    personaSection = `\nNUTZERPROFIL: ${PERSONA_HINTS[ctx.persona]}`
+  }
+
   return `${BASE_PROMPT}
 
 AKTUELLER ARBEITSORDNER: ${rootFolder}
-INHALT (bis Tiefe ${3}): ${list}${statsSection}${recentSection}${actionsSection}${tagsSection}`
+INHALT (bis Tiefe ${3}): ${list}${statsSection}${recentSection}${actionsSection}${tagsSection}${personaSection}`
 }
 
 export const SYSTEM_PROMPT = BASE_PROMPT

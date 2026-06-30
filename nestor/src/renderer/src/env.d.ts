@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { Settings, FileEntry, HistoryItem, OllamaStatus, OllamaChatMessage, DuplicateGroup, FolderStats, SavedAction, StorageInsight, SearchResult, AutomationRule, FileTagsMap } from '../../shared/types'
+import type { Settings, FileEntry, HistoryItem, OllamaStatus, OllamaChatMessage, DuplicateGroup, FolderStats, SavedAction, StorageInsight, SearchResult, AutomationRule, FileTagsMap, ConflictInfo, FsStat, ProblemFinding } from '../../shared/types'
 
 interface NestorAPI {
   window: {
@@ -23,6 +23,10 @@ interface NestorAPI {
     renameFile: (path: string, newName: string) => Promise<HistoryItem>
     deleteFile: (path: string) => Promise<HistoryItem>
     undo: (id: string) => Promise<void>
+    undoAll: (ids: string[]) => Promise<{ succeeded: string[]; failed: string[] }>
+    checkConflict: (to: string) => Promise<ConflictInfo>
+    stat: (path: string) => Promise<FsStat>
+    detectIssues: () => Promise<ProblemFinding[]>
     search: (query: string) => Promise<FileEntry[]>
     previewDocx: (path: string) => Promise<string>
     previewXlsx: (path: string) => Promise<Array<{ name: string; rows: (string | number | boolean | null)[][]; totalRows: number }>>
@@ -64,10 +68,12 @@ interface NestorAPI {
     addWorkspace: () => Promise<{ workspaces: string[]; rootFolder: string } | null>
     removeWorkspace: (folderPath: string) => Promise<{ workspaces: string[]; rootFolder: string }>
     switchWorkspace: (folderPath: string) => Promise<string>
+    createDemoFolder: () => Promise<string>
   }
   ollama: {
     check: () => Promise<OllamaStatus>
     models: () => Promise<string[]>
+    tryStart: () => Promise<boolean>
     testApi: (apiKey: string, baseUrl: string) => Promise<{ ok: boolean; message: string }>
     chat: (
       messages: OllamaChatMessage[],

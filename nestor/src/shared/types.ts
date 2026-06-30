@@ -26,10 +26,12 @@ export interface Message {
   time?: string
   isStreaming?: boolean
   isToolResult?: boolean
-  errorAction?: { label: string; nav: NavSection }
+  errorAction?: { label: string; nav: NavSection; startOllama?: boolean }
 }
 
 export type HistoryActionType = 'create_folder' | 'create_file' | 'move_file' | 'rename_file' | 'delete_file'
+
+export type RiskLevel = 'safe' | 'review' | 'risky'
 
 export interface HistoryItem {
   id: string
@@ -43,6 +45,21 @@ export interface HistoryItem {
   to?: string
   path?: string
   snapshotBase64?: string
+  riskLevel?: RiskLevel
+  reason?: string
+  sizeBytes?: number
+}
+
+export interface ProposedAction {
+  tool: string
+  path?: string
+  from?: string
+  to?: string
+  newName?: string
+  content?: string
+  riskLevel: RiskLevel
+  reason?: string
+  conflictsWith?: string
 }
 
 export interface AnchorPoint {
@@ -59,7 +76,7 @@ export interface AccessedFile {
   accessedAt: number
 }
 
-export type NavSection = 'home' | 'files' | 'chat' | 'settings' | 'help' | 'automations'
+export type NavSection = 'home' | 'files' | 'chat' | 'settings' | 'help' | 'automations' | 'rescue'
 
 export type FileTagsMap = Record<string, string[]>
 
@@ -77,6 +94,7 @@ export type OnboardingStep =
   | 'choose-ai-mode'
   | 'install-ollama'
   | 'pull-model'
+  | 'persona'
   | 'choose-folder'
   | 'done'
 
@@ -88,6 +106,8 @@ export interface OnboardingProgress {
   statusText: string
   speedText?: string
 }
+
+export type Persona = 'school' | 'photos' | 'invoices' | 'downloads_only'
 
 export interface Settings {
   rootFolder: string
@@ -102,6 +122,9 @@ export interface Settings {
   theme: Theme
   notifications: boolean
   minimizeToTray: boolean
+  readOnlyMode: boolean
+  protectedFoldersAck?: string[]
+  persona?: Persona
 }
 
 export interface OllamaStatus {
@@ -184,7 +207,13 @@ export interface SearchResult {
 }
 
 export type AutomationTrigger = 'daily' | 'weekly' | 'on_start'
-export type AutomationActionType = 'move_by_age' | 'sort_by_type' | 'delete_empty_folders'
+export type AutomationActionType =
+  | 'move_by_age'
+  | 'sort_by_type'
+  | 'delete_empty_folders'
+  | 'organize_screenshots'
+  | 'flag_old_installers'
+  | 'suggest_invoice_folder'
 
 export interface AutomationRule {
   id: string
@@ -196,8 +225,34 @@ export interface AutomationRule {
     sourceFolder?: string
     targetFolder?: string
     ageInDays?: number
+    installerAgeThresholdDays?: number
   }
   lastRun: number | null
   lastResult?: string
   createdAt: number
+}
+
+export type ProblemFindingType =
+  | 'untitled_files'
+  | 'old_downloads'
+  | 'likely_duplicate_images'
+  | 'many_installers'
+
+export interface ProblemFinding {
+  type: ProblemFindingType
+  message: string
+  count: number
+}
+
+export interface ConflictInfo {
+  exists: boolean
+  sizeBytes?: number
+  modified?: number
+}
+
+export interface FsStat {
+  exists: boolean
+  sizeBytes: number
+  modified: number
+  isDirectory: boolean
 }

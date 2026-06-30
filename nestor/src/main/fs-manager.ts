@@ -1,9 +1,11 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { shell } from 'electron'
-import { FileEntry, FileType, HistoryItem, DuplicateGroup, DuplicateFile, FolderStats, LargeFile, FileTypeBreakdown, SearchResult } from '../shared/types'
+import { FileEntry, FileType, HistoryItem, DuplicateGroup, DuplicateFile, FolderStats, LargeFile, FileTypeBreakdown, SearchResult, ConflictInfo, ProblemFinding } from '../shared/types'
 import { randomUUID, createHash } from 'crypto'
 import log from './logger'
+
+const SNAPSHOT_SIZE_LIMIT = 5 * 1024 * 1024 // 5 MB — only small files get a restorable snapshot
 
 export function getFileType(filePath: string): FileType {
   const ext = path.extname(filePath).toLowerCase().slice(1)
@@ -103,6 +105,61 @@ export function assertWithinRoot(rootPath: string, targetPath: string): void {
   }
 }
 
+function protectedRoots(): { dir: string; reason: string }[] {
+  const list: { dir: string; reason: string }[] = []
+  const add = (dir: string | undefined, reason: string): void => {
+    if (dir) list.push({ dir, reason })
+  }
+  add(process.env['WINDIR'] || process.env['SystemRoot'], 'Windows-Systemordner')
+  add(process.env['ProgramFiles'], 'Programme-Ordner')
+  add(process.env['ProgramFiles(x86)'], 'Programme-Ordner')
+  add(process.env['ProgramW6432'], 'Programme-Ordner')
+  add(process.env['ProgramData'], 'Programmdaten-Ordner')
+  add(process.env['LOCALAPPDATA'], 'AppData-Ordner (Programmeinstellungen)')
+  add(process.env['APPDATA'], 'AppData-Ordner (Programmeinstellungen)')
+  add(process.env['OneDrive'], 'OneDrive-Synchronisationsordner')
+  add(process.env['OneDriveConsumer'], 'OneDrive-Synchronisationsordner')
+  add(process.env['OneDriveCommercial'], 'OneDrive-Synchronisationsordner')
+  return list
+}
+
+/** Checks whether a path sits inside a sensitive system/sync location, even if it
+ *  is technically inside the user's configured root folder (e.g. root = "C:\"). */
+export function isProtectedPath(targetPath: string): { protected: boolean; reason?: string } {
+  const target = path.resolve(targetPath)
+  const lower = target.toLowerCase()
+  if (/[\\/]system32([\\/]|$)/.test(lower)) {
+    return { protected: true, reason: 'Windows-Systemordner (System32)' }
+  }
+  for (const { dir, reason } of protectedRoots()) {
+    const resolvedDir = path.resolve(dir)
+    if (target === resolvedDir || target.startsWith(resolvedDir + path.sep)) {
+      return { protected: true, reason }
+    }
+  }
+  return { protected: false }
+}
+
+export class ProtectedPathError extends Error {
+  code = 'protected_path' as const
+  reason: string
+  constructor(reason: string) {
+    super(`[protected_path] Geschützter Ordner: ${reason}`)
+    this.name = 'ProtectedPathError'
+    this.reason = reason
+  }
+}
+
+/** Use for any operation that writes, moves, renames, or deletes — on top of the
+ *  root-folder check, this refuses sensitive system/sync locations outright. */
+export function assertSafeToWrite(rootPath: string, targetPath: string): void {
+  assertWithinRoot(rootPath, targetPath)
+  const check = isProtectedPath(targetPath)
+  if (check.protected) {
+    throw new ProtectedPathError(check.reason!)
+  }
+}
+
 export function copyFile(from: string, to: string): HistoryItem {
   fs.copyFileSync(from, to)
   const fromName = path.basename(from)
@@ -165,6 +222,19 @@ export function renameFile(filePath: string, newName: string): HistoryItem {
 }
 
 export async function deleteFile(filePath: string): Promise<HistoryItem> {
+  let snapshotBase64: string | undefined
+  let sizeBytes: number | undefined
+  try {
+    const stat = fs.statSync(filePath)
+    if (!stat.isDirectory()) {
+      sizeBytes = stat.size
+      if (stat.size <= SNAPSHOT_SIZE_LIMIT) {
+        snapshotBase64 = fs.readFileSync(filePath).toString('base64')
+      }
+    }
+  } catch (err) {
+    log.error('[deleteFile] snapshot failed, deleting without restore point', err)
+  }
   await shell.trashItem(filePath)
   return {
     id: randomUUID(),
@@ -174,7 +244,9 @@ export async function deleteFile(filePath: string): Promise<HistoryItem> {
     time: formatTime(new Date()),
     timestamp: Date.now(),
     undone: false,
-    path: filePath
+    path: filePath,
+    snapshotBase64,
+    sizeBytes
   }
 }
 
@@ -199,6 +271,7 @@ export function undoAction(item: HistoryItem): void {
       case 'delete_file':
         if (item.path && item.snapshotBase64) {
           const buf = Buffer.from(item.snapshotBase64, 'base64')
+          fs.mkdirSync(path.dirname(item.path), { recursive: true })
           fs.writeFileSync(item.path, buf)
         }
         break
@@ -206,6 +279,36 @@ export function undoAction(item: HistoryItem): void {
   } catch (err) {
     log.error('[undoAction]', err)
     throw err
+  }
+}
+
+/** Bulk-undo for "Rettungscenter" → "Alles rückgängig machen". Processes the
+ *  given items in reverse-chronological order and stops collecting failures
+ *  rather than throwing, so one already-gone target doesn't block the rest. */
+export function undoMultiple(items: HistoryItem[]): { succeeded: string[]; failed: string[] } {
+  const ordered = [...items].sort((a, b) => b.timestamp - a.timestamp)
+  const succeeded: string[] = []
+  const failed: string[] = []
+  for (const item of ordered) {
+    try {
+      undoAction(item)
+      succeeded.push(item.id)
+    } catch (err) {
+      log.error('[undoMultiple]', item.id, err)
+      failed.push(item.id)
+    }
+  }
+  return { succeeded, failed }
+}
+
+/** Pre-check for a move/copy target before it executes, so the UI can offer
+ *  Behalten/Umbenennen/Überspringen/Vergleichen instead of silently overwriting. */
+export function analyzeConflict(targetPath: string): ConflictInfo {
+  try {
+    const stat = fs.statSync(targetPath)
+    return { exists: true, sizeBytes: stat.size, modified: stat.mtimeMs }
+  } catch {
+    return { exists: false }
   }
 }
 
@@ -525,6 +628,152 @@ export function runDeleteEmptyFolders(rootFolder: string): { deleted: number } {
 
   deleteIfEmpty(rootFolder)
   return { deleted }
+}
+
+const SCREENSHOT_PATTERN = /^(screenshot|bildschirmfoto|screen shot)/i
+const INSTALLER_EXTENSIONS = new Set(['.exe', '.msi', '.dmg', '.pkg'])
+const INVOICE_PATTERN = /(rechnung|invoice)/i
+const UNTITLED_PATTERN = /^(unbenannt|untitled|new |neu(e|er)? )/i
+
+export function runOrganizeScreenshots(sourceFolder: string): { moved: number } {
+  let moved = 0
+  let items: string[]
+  try { items = fs.readdirSync(sourceFolder) } catch { return { moved } }
+  const destDir = path.join(sourceFolder, 'Screenshots')
+
+  for (const name of items) {
+    if (name.startsWith('.') || !SCREENSHOT_PATTERN.test(name)) continue
+    const fullPath = path.join(sourceFolder, name)
+    let stat: fs.Stats
+    try { stat = fs.statSync(fullPath) } catch { continue }
+    if (stat.isDirectory()) continue
+    fs.mkdirSync(destDir, { recursive: true })
+    const dest = path.join(destDir, name)
+    if (dest === fullPath) continue
+    try {
+      fs.renameSync(fullPath, dest)
+      moved++
+    } catch {
+      try { fs.copyFileSync(fullPath, dest); fs.unlinkSync(fullPath); moved++ } catch {}
+    }
+  }
+  return { moved }
+}
+
+export function runFlagOldInstallers(sourceFolder: string, ageInDays: number): { flagged: number } {
+  const cutoff = Date.now() - ageInDays * 24 * 60 * 60 * 1000
+  let flagged = 0
+  let items: string[]
+  try { items = fs.readdirSync(sourceFolder) } catch { return { flagged } }
+  const destDir = path.join(sourceFolder, 'Alte Installer')
+
+  for (const name of items) {
+    if (name.startsWith('.')) continue
+    const ext = path.extname(name).toLowerCase()
+    if (!INSTALLER_EXTENSIONS.has(ext)) continue
+    const fullPath = path.join(sourceFolder, name)
+    let stat: fs.Stats
+    try { stat = fs.statSync(fullPath) } catch { continue }
+    if (stat.isDirectory() || stat.mtimeMs >= cutoff) continue
+    fs.mkdirSync(destDir, { recursive: true })
+    const dest = path.join(destDir, name)
+    if (dest === fullPath) continue
+    try {
+      fs.renameSync(fullPath, dest)
+      flagged++
+    } catch {
+      try { fs.copyFileSync(fullPath, dest); fs.unlinkSync(fullPath); flagged++ } catch {}
+    }
+  }
+  return { flagged }
+}
+
+export function runSuggestInvoiceFolder(sourceFolder: string): { moved: number } {
+  let moved = 0
+  let items: string[]
+  try { items = fs.readdirSync(sourceFolder) } catch { return { moved } }
+  const destDir = path.join(sourceFolder, 'Rechnungen')
+
+  for (const name of items) {
+    if (name.startsWith('.') || !INVOICE_PATTERN.test(name)) continue
+    const fullPath = path.join(sourceFolder, name)
+    let stat: fs.Stats
+    try { stat = fs.statSync(fullPath) } catch { continue }
+    if (stat.isDirectory()) continue
+    fs.mkdirSync(destDir, { recursive: true })
+    const dest = path.join(destDir, name)
+    if (dest === fullPath) continue
+    try {
+      fs.renameSync(fullPath, dest)
+      moved++
+    } catch {
+      try { fs.copyFileSync(fullPath, dest); fs.unlinkSync(fullPath); moved++ } catch {}
+    }
+  }
+  return { moved }
+}
+
+/** Cheap heuristics surfaced proactively on the home dashboard ("Problemerkennung").
+ *  Reuses analyzeFolder/findDuplicates-style walking rather than a third walker. */
+export function detectIssues(rootFolder: string): ProblemFinding[] {
+  const findings: ProblemFinding[] = []
+  let untitledCount = 0
+  let installerCount = 0
+  const oneYearAgo = Date.now() - 365 * 24 * 60 * 60 * 1000
+
+  function walk(dir: string, depth: number): void {
+    if (depth > 3) return
+    let items: string[]
+    try { items = fs.readdirSync(dir) } catch { return }
+    for (const name of items) {
+      if (name.startsWith('.')) continue
+      const fullPath = path.join(dir, name)
+      let stat: fs.Stats
+      try { stat = fs.statSync(fullPath) } catch { continue }
+      if (stat.isDirectory()) {
+        walk(fullPath, depth + 1)
+        continue
+      }
+      if (UNTITLED_PATTERN.test(name)) untitledCount++
+      if (INSTALLER_EXTENSIONS.has(path.extname(name).toLowerCase())) installerCount++
+    }
+  }
+  walk(rootFolder, 0)
+
+  if (untitledCount >= 3) {
+    findings.push({ type: 'untitled_files', count: untitledCount, message: `Viele Dateien heißen "Unbenannt" oder ähnlich (${untitledCount}).` })
+  }
+  if (installerCount >= 3) {
+    findings.push({ type: 'many_installers', count: installerCount, message: `Es liegen ${installerCount} Installationsdateien herum, die du wahrscheinlich nicht mehr brauchst.` })
+  }
+
+  const stats = analyzeFolder(rootFolder)
+  const oldCount = stats.oldFiles.filter(f => f.modified < oneYearAgo).length
+  if (oldCount >= 5) {
+    findings.push({ type: 'old_downloads', count: oldCount, message: `${oldCount} Dateien wurden seit über einem Jahr nicht mehr angefasst.` })
+  }
+
+  return findings
+}
+
+/** "Probieren ohne Risiko": a small set of harmless sample files the user can
+ *  experiment on without touching anything real. */
+export function createDemoFolder(demoPath: string): void {
+  fs.mkdirSync(demoPath, { recursive: true })
+  const sample: Record<string, string> = {
+    'Rechnung_2024.pdf': 'Beispiel-Rechnung (Demo-Datei, ungefährlich).',
+    'Rechnung_2024_Kopie.pdf': 'Beispiel-Rechnung (Demo-Datei, ungefährlich).',
+    'Urlaubsfoto.jpg': 'Demo-Bild (kein echtes Foto).',
+    'Urlaubsfoto_Kopie.jpg': 'Demo-Bild (kein echtes Foto).',
+    'Unbenannt.txt': 'Beispieldatei ohne aussagekräftigen Namen.',
+    'Screenshot 2024-01-01.png': 'Demo-Screenshot.',
+    'Installer_alt.exe.txt': 'Steht stellvertretend für einen alten Installer (zum Testen als .txt).',
+    'Notizen.txt': 'Ein paar Beispielnotizen zum Ausprobieren.'
+  }
+  for (const [name, content] of Object.entries(sample)) {
+    const filePath = path.join(demoPath, name)
+    if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, content, 'utf-8')
+  }
 }
 
 function formatTime(date: Date): string {

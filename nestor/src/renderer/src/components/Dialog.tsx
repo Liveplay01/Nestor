@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 
-function Backdrop({ onClick }: { onClick: () => void }): React.JSX.Element {
+export function Backdrop({ onClick }: { onClick: () => void }): React.JSX.Element {
   return (
     <div
       className="fixed inset-0 z-40"
@@ -10,11 +10,11 @@ function Backdrop({ onClick }: { onClick: () => void }): React.JSX.Element {
   )
 }
 
-function DialogBox({ children }: { children: React.ReactNode }): React.JSX.Element {
+export function DialogBox({ children, maxWidth = 360 }: { children: React.ReactNode; maxWidth?: number }): React.JSX.Element {
   return (
     <div
       className="fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full rounded-xl border border-border-strong shadow-window p-5"
-      style={{ maxWidth: 360, background: 'var(--color-bg)' }}
+      style={{ maxWidth, background: 'var(--color-bg)' }}
     >
       {children}
     </div>

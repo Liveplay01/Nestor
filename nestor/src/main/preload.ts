@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Settings, OllamaChatMessage, SavedAction, AutomationRule, FileTagsMap } from '../shared/types'
+import type { Settings, OllamaChatMessage, SavedAction, AutomationRule, FileTagsMap, ConflictInfo, FsStat, ProblemFinding, HistoryItem } from '../shared/types'
 
 contextBridge.exposeInMainWorld('nestor', {
   window: {
@@ -23,6 +23,11 @@ contextBridge.exposeInMainWorld('nestor', {
       ipcRenderer.invoke('fs:rename-file', { path, newName }),
     deleteFile: (path: string) => ipcRenderer.invoke('fs:delete-file', { path }),
     undo: (id: string) => ipcRenderer.invoke('fs:undo', { id }),
+    undoAll: (ids: string[]): Promise<{ succeeded: string[]; failed: string[] }> =>
+      ipcRenderer.invoke('fs:undo-all', { ids }),
+    checkConflict: (to: string): Promise<ConflictInfo> => ipcRenderer.invoke('fs:check-conflict', { to }),
+    stat: (path: string): Promise<FsStat> => ipcRenderer.invoke('fs:stat', { path }),
+    detectIssues: (): Promise<ProblemFinding[]> => ipcRenderer.invoke('fs:detect-issues'),
     search: (query: string) => ipcRenderer.invoke('fs:search', { query }),
     previewDocx: (path: string) => ipcRenderer.invoke('fs:preview-docx', { path }),
     previewXlsx: (path: string) => ipcRenderer.invoke('fs:preview-xlsx', { path }),
@@ -77,11 +82,13 @@ contextBridge.exposeInMainWorld('nestor', {
     removeWorkspace: (folderPath: string): Promise<{ workspaces: string[]; rootFolder: string }> =>
       ipcRenderer.invoke('app:remove-workspace', { folderPath }),
     switchWorkspace: (folderPath: string): Promise<string> =>
-      ipcRenderer.invoke('app:switch-workspace', { folderPath })
+      ipcRenderer.invoke('app:switch-workspace', { folderPath }),
+    createDemoFolder: (): Promise<string> => ipcRenderer.invoke('app:create-demo-folder')
   },
   ollama: {
     check: () => ipcRenderer.invoke('ollama:check'),
     models: () => ipcRenderer.invoke('ollama:models'),
+    tryStart: (): Promise<boolean> => ipcRenderer.invoke('ollama:try-start'),
     testApi: (apiKey: string, baseUrl: string): Promise<{ ok: boolean; message: string }> =>
       ipcRenderer.invoke('ollama:test-api', { apiKey, baseUrl }),
     chat: (messages: OllamaChatMessage[], systemPrompt: string, model?: string) =>
@@ -108,9 +115,9 @@ contextBridge.exposeInMainWorld('nestor', {
     }
   },
   history: {
-    get: () => ipcRenderer.invoke('history:get'),
-    onUpdated: (cb: (items: unknown[]) => void) => {
-      const h = (_: unknown, items: unknown[]) => cb(items)
+    get: (): Promise<HistoryItem[]> => ipcRenderer.invoke('history:get'),
+    onUpdated: (cb: (items: HistoryItem[]) => void) => {
+      const h = (_: unknown, items: HistoryItem[]) => cb(items)
       ipcRenderer.on('history:updated', h)
       return () => ipcRenderer.removeListener('history:updated', h)
     }

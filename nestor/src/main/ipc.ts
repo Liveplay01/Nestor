@@ -23,17 +23,25 @@ import {
   renameFile,
   deleteFile,
   undoAction,
+  undoMultiple,
   searchFiles,
   searchFullText,
   assertWithinRoot,
+  assertSafeToWrite,
   findDuplicates,
   analyzeFolder,
   analyzeStorage,
+  analyzeConflict,
+  detectIssues,
   runMoveByAge,
   runSortByType,
-  runDeleteEmptyFolders
+  runDeleteEmptyFolders,
+  runOrganizeScreenshots,
+  runFlagOldInstallers,
+  runSuggestInvoiceFolder,
+  createDemoFolder
 } from './fs-manager'
-import { checkOllama, streamChat, getAvailableModels, testExternalApi } from './ollama'
+import { checkOllama, streamChat, getAvailableModels, testExternalApi, tryStartOllama } from './ollama'
 import { runOnboarding } from './onboarding'
 import { Settings, HistoryItem, SavedAction, AutomationRule, FileTagsMap } from '../shared/types'
 import log from './logger'
@@ -52,7 +60,8 @@ const store = new Store<{ settings: Settings; history: HistoryItem[]; savedActio
       apiBaseUrl: 'https://api.openai.com/v1',
       theme: 'light',
       notifications: true,
-      minimizeToTray: false
+      minimizeToTray: false,
+      readOnlyMode: false
     },
     history: [],
     savedActions: [],
@@ -65,6 +74,14 @@ let watcher: chokidar.FSWatcher | null = null
 
 export function getMinimizeToTray(): boolean {
   return store.get('settings').minimizeToTray ?? false
+}
+
+/** "Nur anschauen"-Modus: enforced here too, not just in the renderer, so the
+ *  guarantee "Nestor ändert nichts" holds even if a UI gate is bypassed. */
+function assertNotReadOnly(): void {
+  if (store.get('settings').readOnlyMode) {
+    throw new Error('[read_only_mode] Nur-Anschauen-Modus ist aktiv — Nestor darf nichts verändern.')
+  }
 }
 
 export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
@@ -135,27 +152,43 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
     return readFile(path)
   })
 
+  ipcMain.handle('fs:check-conflict', (_, { to }: { to: string }) => {
+    return analyzeConflict(to)
+  })
+
+  ipcMain.handle('fs:stat', (_, { path: p }: { path: string }) => {
+    try {
+      const stat = fs.statSync(p)
+      return { exists: true, sizeBytes: stat.size, modified: stat.mtimeMs, isDirectory: stat.isDirectory() }
+    } catch {
+      return { exists: false, sizeBytes: 0, modified: 0, isDirectory: false }
+    }
+  })
+
   ipcMain.handle('fs:create-folder', (_, { path: p }: { path: string }) => {
+    assertNotReadOnly()
     const root = store.get('settings').rootFolder
-    assertWithinRoot(root, p)
+    assertSafeToWrite(root, p)
     const item = createFolder(p)
     saveHistory(item)
     return item
   })
 
   ipcMain.handle('fs:copy-file', (_, { from, to }: { from: string; to: string }) => {
+    assertNotReadOnly()
     const root = store.get('settings').rootFolder
     assertWithinRoot(root, from)
-    assertWithinRoot(root, to)
+    assertSafeToWrite(root, to)
     const item = copyFile(from, to)
     saveHistory(item)
     return item
   })
 
   ipcMain.handle('fs:move-file', (_, { from, to }: { from: string; to: string }) => {
+    assertNotReadOnly()
     const root = store.get('settings').rootFolder
-    assertWithinRoot(root, from)
-    assertWithinRoot(root, to)
+    assertSafeToWrite(root, from)
+    assertSafeToWrite(root, to)
     const item = moveFile(from, to)
     saveHistory(item)
     return item
@@ -164,8 +197,10 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
   ipcMain.handle(
     'fs:rename-file',
     (_, { path: p, newName }: { path: string; newName: string }) => {
+      assertNotReadOnly()
       const root = store.get('settings').rootFolder
-      assertWithinRoot(root, p)
+      assertSafeToWrite(root, p)
+      assertSafeToWrite(root, path.join(path.dirname(p), newName))
       const item = renameFile(p, newName)
       saveHistory(item)
       return item
@@ -173,8 +208,9 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
   )
 
   ipcMain.handle('fs:delete-file', async (_, { path: p }: { path: string }) => {
+    assertNotReadOnly()
     const root = store.get('settings').rootFolder
-    assertWithinRoot(root, p)
+    assertSafeToWrite(root, p)
     const item = await deleteFile(p)
     saveHistory(item)
     return item
@@ -190,6 +226,19 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
     getWin()?.webContents.send('history:updated', updated)
   })
 
+  ipcMain.handle('fs:undo-all', (_, { ids }: { ids: string[] }) => {
+    const history = store.get('history')
+    const items = ids
+      .map((id) => history.find((h) => h.id === id))
+      .filter((h): h is HistoryItem => !!h && !h.undone)
+    const { succeeded, failed } = undoMultiple(items)
+    const undoneSet = new Set(succeeded)
+    const updated = history.map((h) => (undoneSet.has(h.id) ? { ...h, undone: true } : h))
+    store.set('history', updated)
+    getWin()?.webContents.send('history:updated', updated)
+    return { succeeded, failed }
+  })
+
   ipcMain.handle('fs:search', (_, { query }: { query: string }) => {
     const root = store.get('settings').rootFolder
     if (!root) return []
@@ -201,6 +250,7 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
   // ── Ollama ────────────────────────────────────────────────
   ipcMain.handle('ollama:check', () => checkOllama())
   ipcMain.handle('ollama:models', () => getAvailableModels())
+  ipcMain.handle('ollama:try-start', () => tryStartOllama())
   ipcMain.handle('ollama:test-api', (_, { apiKey, baseUrl }: { apiKey: string; baseUrl: string }) =>
     testExternalApi(apiKey, baseUrl)
   )
@@ -262,8 +312,9 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
 
   // ── Extended fs ───────────────────────────────────────────
   ipcMain.handle('fs:write-file', (_, { path: filePath, content }: { path: string; content: string }) => {
+    assertNotReadOnly()
     const root = store.get('settings').rootFolder
-    assertWithinRoot(root, filePath)
+    assertSafeToWrite(root, filePath)
     try {
       fs.writeFileSync(filePath, content, 'utf-8')
     } catch (err) {
@@ -272,8 +323,9 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
     }
   })
   ipcMain.handle('fs:create-file', (_, { path: filePath }: { path: string }) => {
+    assertNotReadOnly()
     const root = store.get('settings').rootFolder
-    assertWithinRoot(root, filePath)
+    assertSafeToWrite(root, filePath)
     try {
       fs.writeFileSync(filePath, '', 'utf-8')
     } catch (err) {
@@ -512,6 +564,7 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
   })
 
   ipcMain.handle('automations:run-now', async (_, id: string) => {
+    assertNotReadOnly()
     const list = store.get('automations')
     const rule = list.find(r => r.id === id)
     if (!rule) return
@@ -531,6 +584,15 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
       } else if (rule.action === 'delete_empty_folders') {
         const { deleted } = runDeleteEmptyFolders(source)
         result = { count: deleted, label: `${deleted} leere${deleted !== 1 ? ' Ordner' : 'r Ordner'} gelöscht` }
+      } else if (rule.action === 'organize_screenshots') {
+        const { moved } = runOrganizeScreenshots(source)
+        result = { count: moved, label: `${moved} Screenshot${moved !== 1 ? 's' : ''} einsortiert` }
+      } else if (rule.action === 'flag_old_installers') {
+        const { flagged } = runFlagOldInstallers(source, rule.config.installerAgeThresholdDays ?? 30)
+        result = { count: flagged, label: `${flagged} alte${flagged !== 1 ? '' : 'r'} Installer markiert` }
+      } else if (rule.action === 'suggest_invoice_folder') {
+        const { moved } = runSuggestInvoiceFolder(source)
+        result = { count: moved, label: `${moved} Rechnung${moved !== 1 ? 'en' : ''} einsortiert` }
       }
     } catch (err) {
       log.error('[automations:run-now]', err)
@@ -547,6 +609,7 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
 
   // ── Automation Scheduler ──────────────────────────────────
   function checkAndRunDueAutomations(): void {
+    if (store.get('settings').readOnlyMode) return
     const rules = store.get('automations').filter(r => r.enabled)
     const root = store.get('settings').rootFolder
     if (!root) return
@@ -577,6 +640,15 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
         } else if (rule.action === 'delete_empty_folders') {
           const { deleted } = runDeleteEmptyFolders(source)
           resultLabel = `${deleted} leere${deleted !== 1 ? ' Ordner' : 'r Ordner'} gelöscht`
+        } else if (rule.action === 'organize_screenshots') {
+          const { moved } = runOrganizeScreenshots(source)
+          resultLabel = `${moved} Screenshot${moved !== 1 ? 's' : ''} einsortiert`
+        } else if (rule.action === 'flag_old_installers') {
+          const { flagged } = runFlagOldInstallers(source, rule.config.installerAgeThresholdDays ?? 30)
+          resultLabel = `${flagged} alte${flagged !== 1 ? '' : 'r'} Installer markiert`
+        } else if (rule.action === 'suggest_invoice_folder') {
+          const { moved } = runSuggestInvoiceFolder(source)
+          resultLabel = `${moved} Rechnung${moved !== 1 ? 'en' : ''} einsortiert`
         }
         const list = store.get('automations').map(r => r.id === rule.id ? { ...r, lastRun: now, lastResult: resultLabel } : r)
         store.set('automations', list)
@@ -589,15 +661,36 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null): void {
 
   // ── Batch rename ──────────────────────────────────────────
   ipcMain.handle('fs:batch-rename', (_, renames: { from: string; newName: string }[]) => {
+    assertNotReadOnly()
     const root = store.get('settings').rootFolder
     const results: HistoryItem[] = []
     for (const r of renames) {
-      assertWithinRoot(root, r.from)
+      assertSafeToWrite(root, r.from)
+      assertSafeToWrite(root, path.join(path.dirname(r.from), r.newName))
       const item = renameFile(r.from, r.newName)
       saveHistory(item)
       results.push(item)
     }
     return results
+  })
+
+  // ── Problem detection (proaktive Hinweise) ─────────────────
+  ipcMain.handle('fs:detect-issues', () => {
+    const root = store.get('settings').rootFolder
+    if (!root) return []
+    try {
+      return detectIssues(root)
+    } catch (err) {
+      log.error('[fs:detect-issues]', err)
+      return []
+    }
+  })
+
+  // ── Demo-Sandbox ("Probieren ohne Risiko") ─────────────────
+  ipcMain.handle('app:create-demo-folder', () => {
+    const demoPath = path.join(app.getPath('userData'), 'Nestor-Demo')
+    createDemoFolder(demoPath)
+    return demoPath
   })
 
   // ── Tags ──────────────────────────────────────────────────

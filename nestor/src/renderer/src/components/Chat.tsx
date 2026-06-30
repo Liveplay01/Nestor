@@ -6,9 +6,10 @@ import { useStore } from '../store/useStore'
 import { getFileColor } from '../lib/fileColors'
 import { buildSystemPrompt } from '../lib/systemPrompt'
 import { randomId, formatTime } from '../lib/utils'
-import type { Message, HistoryItem, FileEntry, NavSection } from '@shared/types'
+import type { Message, HistoryItem, FileEntry, NavSection, RiskLevel, ConflictInfo, FsStat } from '@shared/types'
 import NestorLogo from './NestorLogo'
 import NestorAnimation from './NestorAnimation'
+import { ConflictDialog, type ConflictResolution } from './ConflictDialog'
 
 type AiStatus = 'green' | 'yellow' | 'red'
 type ContextFile = { name: string; path: string; color: string }
@@ -22,9 +23,12 @@ const STATUS_TOOLTIPS: Record<AiStatus, string> = {
   red: 'Keine KI verbunden. Klicke auf ⚙ Einstellungen um Ollama einzurichten oder einen API-Key einzutragen.'
 }
 
-function friendlyError(err: string): { message: string; action?: { label: string; nav: NavSection } } {
+function friendlyError(err: string): { message: string; action?: { label: string; nav: NavSection; startOllama?: boolean } } {
   if (err.includes('ECONNREFUSED') || err.includes('11434'))
-    return { message: '⚠️ Nestor ist nicht erreichbar. Läuft Ollama noch?', action: { label: 'KI-Einstellungen öffnen', nav: 'settings' } }
+    return {
+      message: '⚠️ Die lokale KI ist gerade nicht gestartet.',
+      action: { label: 'Lokale KI jetzt starten', nav: 'settings', startOllama: true }
+    }
   if (err.includes('401') || err.toLowerCase().includes('unauthorized') || err.toLowerCase().includes('api key'))
     return { message: '⚠️ Dein API-Schlüssel ist ungültig oder abgelaufen.', action: { label: 'API-Key prüfen', nav: 'settings' } }
   if (err.includes('429') || err.toLowerCase().includes('rate limit'))
@@ -262,7 +266,14 @@ const MessageBubble = memo(function MessageBubble({ msg, onAnchor, onCopy }: { m
         </div>
         {msg.errorAction && (
           <button
-            onClick={() => useStore.getState().setActiveNav(msg.errorAction!.nav)}
+            onClick={() => {
+              if (msg.errorAction!.startOllama) {
+                window.nestor.ollama.tryStart()
+                useStore.getState().addToast({ type: 'info', message: 'Nestor versucht, die lokale KI zu starten…' })
+                return
+              }
+              useStore.getState().setActiveNav(msg.errorAction!.nav)
+            }}
             className="mt-2 text-[12.5px] font-medium transition-colors hover:opacity-70"
             style={{ color: 'var(--color-accent)' }}
           >
@@ -397,7 +408,27 @@ type PendingAction = Record<string, string>
 
 function basename(p: string): string { return p.split(/[/\\]/).pop() ?? p }
 
-function describeAction(a: PendingAction): { label: string; accent: string; icon: React.JSX.Element } {
+const RISK_BADGE: Record<RiskLevel, { label: string; bg: string; fg: string }> = {
+  safe: { label: 'Sehr sicher', bg: '#DCFCE7', fg: '#16A34A' },
+  review: { label: 'Bitte prüfen', bg: '#FEF3C7', fg: '#CA8A04' },
+  risky: { label: 'Riskant', bg: '#FEE2E2', fg: '#DC2626' }
+}
+
+// Fallback for when the LLM omits/mis-types the "risk" field — never trust it blindly.
+function classifyRisk(a: PendingAction): RiskLevel {
+  if (a.risk === 'safe' || a.risk === 'review' || a.risk === 'risky') return a.risk
+  if (a.tool === 'delete_file') return 'risky'
+  if (a.tool === 'write_file' || a.tool === 'move_file' || a.tool === 'copy_file') return 'review'
+  return 'safe'
+}
+
+function beforeAfterFor(a: PendingAction): { before: string; after: string } | undefined {
+  if (a.tool === 'move_file' || a.tool === 'copy_file') return { before: a.from, after: a.to }
+  if (a.tool === 'rename_file') return { before: basename(a.path), after: a.newName }
+  return undefined
+}
+
+function describeActionBase(a: PendingAction): { label: string; accent: string; icon: React.JSX.Element } {
   const iconProps = { width: 13, height: 13, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.9', strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
   switch (a.tool) {
     case 'create_folder': return {
@@ -461,6 +492,17 @@ function describeAction(a: PendingAction): { label: string; accent: string; icon
       icon: <svg {...iconProps}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
     }
   }
+}
+
+function describeAction(a: PendingAction): {
+  label: string
+  accent: string
+  icon: React.JSX.Element
+  riskLevel: RiskLevel
+  reason?: string
+  beforeAfter?: { before: string; after: string }
+} {
+  return { ...describeActionBase(a), riskLevel: classifyRisk(a), reason: a.reason, beforeAfter: beforeAfterFor(a) }
 }
 
 // ─── Main Chat ─────────────────────────────────────────────────────────────

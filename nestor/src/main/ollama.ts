@@ -1,8 +1,27 @@
 import { BrowserWindow } from 'electron'
+import { spawn } from 'child_process'
+import * as fs from 'fs'
+import * as path from 'path'
 import { OllamaChatMessage, OllamaStatus, Settings } from '../shared/types'
 
 const OLLAMA_BASE = 'http://localhost:11434'
 const DEFAULT_MODEL = 'llama3.2:3b'
+
+/** Used by the "Die lokale KI ist gerade nicht gestartet" error CTA — tries to
+ *  launch the Ollama background service so the user doesn't have to find it themselves. */
+export function tryStartOllama(): boolean {
+  const candidates = [
+    path.join(process.env['LOCALAPPDATA'] ?? '', 'Programs', 'Ollama', 'ollama.exe'),
+    path.join(process.env['ProgramFiles'] ?? '', 'Ollama', 'ollama.exe')
+  ]
+  const exe = candidates.find((p) => p && fs.existsSync(p)) ?? 'ollama'
+  try {
+    spawn(exe, ['serve'], { detached: true, stdio: 'ignore', shell: false }).unref()
+    return true
+  } catch {
+    return false
+  }
+}
 
 export async function checkOllama(): Promise<OllamaStatus> {
   try {
