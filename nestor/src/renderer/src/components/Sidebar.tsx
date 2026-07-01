@@ -57,6 +57,16 @@ const ICONS: NavItem[] = [
         <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
       </svg>
     )
+  },
+  {
+    id: 'rescue',
+    label: 'Rettungscenter',
+    icon: (
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        <path d="M9 12l2 2 4-4" />
+      </svg>
+    )
   }
 ]
 
@@ -79,7 +89,8 @@ const SHORT_LABELS: Record<string, string> = {
   chat: 'Chat',
   help: 'Hilfe',
   settings: 'Einst.',
-  automations: 'Auto.'
+  automations: 'Auto.',
+  rescue: 'Rettung'
 }
 
 function NavButton({ item, active, onClick }: { item: NavItem & { action?: () => void }; active: boolean; onClick: () => void }): React.JSX.Element {

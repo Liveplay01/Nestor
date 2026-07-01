@@ -395,7 +395,7 @@ export default function SettingsPage(): React.JSX.Element {
 
         {/* Files & Folders */}
         <Section title="Dateien & Ordner">
-          <Row label="Wurzelordner" hint={settings.rootFolder || 'Kein Ordner ausgewählt'}>
+          <Row label="Hauptordner" hint={settings.rootFolder || 'Kein Ordner ausgewählt'}>
             <button
               onClick={selectFolder}
               className="h-8 px-4 rounded-lg border border-border-strong text-[12.5px] font-medium text-text-muted transition-colors hover:bg-surface"
@@ -528,6 +528,15 @@ export default function SettingsPage(): React.JSX.Element {
             <Toggle
               value={settings.minimizeToTray ?? false}
               onChange={(v) => save({ minimizeToTray: v })}
+            />
+          </Row>
+          <Row
+            label="Nur-Anschauen-Modus"
+            hint="Nestor macht Vorschläge, führt aber keine Dateiänderungen durch – ideal zum gefahrlosen Erkunden."
+          >
+            <Toggle
+              value={settings.readOnlyMode ?? false}
+              onChange={(v) => save({ readOnlyMode: v })}
             />
           </Row>
         </Section>

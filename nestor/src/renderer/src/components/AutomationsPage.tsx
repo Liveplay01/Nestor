@@ -17,6 +17,21 @@ const ACTION_META: Record<AutomationActionType, { icon: string; label: string; d
     icon: '🧹',
     label: 'Leere Ordner löschen',
     description: 'Leere Unterordner im Arbeitsbereich automatisch entfernen'
+  },
+  organize_screenshots: {
+    icon: '🖼️',
+    label: 'Screenshots sortieren',
+    description: 'Screenshots automatisch in einen dedizierten Ordner verschieben'
+  },
+  flag_old_installers: {
+    icon: '📥',
+    label: 'Alte Installer markieren',
+    description: 'Setup-Dateien die älter als N Tage sind, in einen Ordner zur Überprüfung verschieben'
+  },
+  suggest_invoice_folder: {
+    icon: '🧾',
+    label: 'Rechnungen sortieren',
+    description: 'Dateien mit „Rechnung", „Invoice" oder ähnlichem Namen in einen Rechnungsordner verschieben'
   }
 }
 
@@ -54,6 +69,7 @@ function AutomationWizard({ settings, onSave, onClose }: WizardProps): React.JSX
   const [sourceFolder, setSourceFolder] = useState('')
   const [targetFolder, setTargetFolder] = useState('')
   const [ageInDays, setAgeInDays] = useState(30)
+  const [installerAgeDays, setInstallerAgeDays] = useState(90)
 
   const pickFolder = async (setter: (p: string) => void): Promise<void> => {
     const f = await window.nestor.settings.selectFolder()
@@ -71,7 +87,8 @@ function AutomationWizard({ settings, onSave, onClose }: WizardProps): React.JSX
       config: {
         sourceFolder: sourceFolder || settings?.rootFolder || '',
         targetFolder: action === 'move_by_age' ? (targetFolder || '') : undefined,
-        ageInDays: action === 'move_by_age' ? ageInDays : undefined
+        ageInDays: action === 'move_by_age' ? ageInDays : undefined,
+        installerAgeThresholdDays: action === 'flag_old_installers' ? installerAgeDays : undefined
       },
       lastRun: null,
       createdAt: Date.now()
@@ -165,6 +182,21 @@ function AutomationWizard({ settings, onSave, onClose }: WizardProps): React.JSX
                   </button>
                 </div>
               </div>
+
+              {action === 'flag_old_installers' && (
+                <div>
+                  <label className="text-[12px] text-text-hint mb-1.5 block">Installer älter als (Tage)</label>
+                  <input
+                    type="number"
+                    value={installerAgeDays}
+                    min={1}
+                    max={3650}
+                    onChange={e => setInstallerAgeDays(Number(e.target.value))}
+                    className="h-9 px-3 rounded-lg border border-border-strong text-[13px] text-text-primary outline-none w-32"
+                    style={{ background: 'var(--color-bg)' }}
+                  />
+                </div>
+              )}
 
               {action === 'move_by_age' && (
                 <>
@@ -353,6 +385,44 @@ export default function AutomationsPage(): React.JSX.Element {
             </svg>
             Neue Automation
           </button>
+        </div>
+
+        {/* Preset templates */}
+        <div className="mb-8">
+          <div className="text-[12px] font-semibold text-text-hint uppercase tracking-wider mb-3">Vorlagen – schnell loslegen</div>
+          <div className="grid grid-cols-2 gap-2.5">
+            {([
+              { action: 'organize_screenshots' as const, trigger: 'daily' as const, label: 'Screenshots täglich sortieren', hint: 'Bewegt Screenshots in einen eigenen Ordner' },
+              { action: 'flag_old_installers' as const, trigger: 'weekly' as const, label: 'Alte Installer aufräumen', hint: 'Installer älter als 90 Tage in Prüfordner' },
+              { action: 'suggest_invoice_folder' as const, trigger: 'weekly' as const, label: 'Rechnungen einsammeln', hint: 'Dateien mit „Rechnung" automatisch sortieren' },
+              { action: 'delete_empty_folders' as const, trigger: 'weekly' as const, label: 'Leere Ordner entfernen', hint: 'Ordnet deinen Arbeitsbereich jede Woche auf' }
+            ]).map((preset) => (
+              <button
+                key={preset.action + preset.trigger}
+                onClick={async () => {
+                  const rule: import('@shared/types').AutomationRule = {
+                    id: Math.random().toString(36).slice(2),
+                    name: preset.label,
+                    enabled: true,
+                    trigger: preset.trigger,
+                    action: preset.action,
+                    config: {
+                      sourceFolder: settings?.rootFolder || '',
+                      installerAgeThresholdDays: preset.action === 'flag_old_installers' ? 90 : undefined
+                    },
+                    lastRun: null,
+                    createdAt: Date.now()
+                  }
+                  await handleSaveRule(rule)
+                }}
+                className="text-left p-3.5 rounded-xl border border-border-strong transition-all hover:border-accent hover:bg-accent-faint"
+                style={{ background: 'var(--color-surface)' }}
+              >
+                <div className="text-[13px] font-semibold text-text-primary mb-0.5">{ACTION_META[preset.action].icon} {preset.label}</div>
+                <div className="text-[11.5px] text-text-hint">{preset.hint}</div>
+              </button>
+            ))}
+          </div>
         </div>
 
         {automations.length === 0 ? (

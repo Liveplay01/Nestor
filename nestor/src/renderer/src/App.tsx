@@ -18,6 +18,7 @@ const HomePage = lazy(() => import('./components/HomePage'))
 const Explorer = lazy(() => import('./components/Explorer'))
 const SettingsPage = lazy(() => import('./components/SettingsPage'))
 const AutomationsPage = lazy(() => import('./components/AutomationsPage'))
+const RescueCenter = lazy(() => import('./components/RescueCenter'))
 const FullTextSearch = lazy(() => import('./components/FullTextSearch'))
 
 const panelVariants = {
@@ -183,6 +184,9 @@ export default function App(): React.JSX.Element {
             )}
             {activeNav === 'automations' && (
               <Suspense fallback={null}><AutomationsPage /></Suspense>
+            )}
+            {activeNav === 'rescue' && (
+              <Suspense fallback={null}><RescueCenter /></Suspense>
             )}
             {activeNav === 'chat' && (
               <>

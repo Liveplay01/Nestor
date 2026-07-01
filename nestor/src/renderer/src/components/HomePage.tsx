@@ -5,7 +5,7 @@ import NestorLogo from './NestorLogo'
 import DuplicateFinder from './DuplicateFinder'
 import InsightsDashboard from './InsightsDashboard'
 import SavedActionDialog from './SavedActionDialog'
-import type { NavSection, SavedAction } from '@shared/types'
+import type { NavSection, SavedAction, ProblemFinding } from '@shared/types'
 
 function getGreeting(): string {
   const h = new Date().getHours()
@@ -267,6 +267,7 @@ export default function HomePage(): React.JSX.Element {
   const greeting = useMemo(() => getGreeting(), [])
   const [showDuplicates, setShowDuplicates] = useState(false)
   const [showInsights, setShowInsights] = useState(false)
+  const [issues, setIssues] = useState<ProblemFinding[]>([])
 
   const goToChat = useCallback((prompt?: string): void => {
     if (prompt) {
@@ -326,6 +327,11 @@ export default function HomePage(): React.JSX.Element {
 
     check()
   }, [settings?.rootFolder, settings?.onboardingComplete, addToast])
+
+  useEffect(() => {
+    if (!settings?.rootFolder || !settings?.onboardingComplete) return
+    window.nestor.fs.detectIssues().then(setIssues).catch(() => {})
+  }, [settings?.rootFolder, settings?.onboardingComplete])
 
   return (
     <div className="flex-1 overflow-y-auto" style={{ background: 'var(--color-bg)' }}>
@@ -388,6 +394,56 @@ export default function HomePage(): React.JSX.Element {
             ))}
           </div>
         </motion.section>
+
+        {/* Proactive issue cards */}
+        {issues.length > 0 && (
+          <motion.section
+            className="mb-10"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05, duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+          >
+            <h2 className="text-[12.5px] font-semibold text-text-hint uppercase tracking-wider mb-3">
+              Nestor hat etwas bemerkt
+            </h2>
+            <div className="flex flex-col gap-2">
+              {issues.map((issue) => {
+                const ISSUE_PROMPTS: Record<string, string> = {
+                  untitled_files: 'Ich habe Dateien mit generischen Namen wie "Unbenannt" oder "untitled". Hilf mir, sie sinnvoll umzubenennen.',
+                  old_downloads: 'Mein Downloads-Ordner enthält viele alte Dateien. Hilf mir, ihn aufzuräumen.',
+                  likely_duplicate_images: 'Ich habe möglicherweise doppelte Bilder in meinem Ordner. Kannst du mir helfen, Duplikate zu finden?',
+                  many_installers: 'Ich habe viele Setup- und Installationsdateien. Hilf mir, alte Installer zu bereinigen.'
+                }
+                const ISSUE_ICONS: Record<string, string> = {
+                  untitled_files: '📝',
+                  old_downloads: '📥',
+                  likely_duplicate_images: '🖼️',
+                  many_installers: '📦'
+                }
+                return (
+                  <button
+                    key={issue.type}
+                    onClick={() => goToChat(ISSUE_PROMPTS[issue.type] ?? issue.message)}
+                    className="flex items-start gap-3 p-3.5 rounded-xl border border-border-strong text-left transition-all hover:bg-surface card-hover"
+                    style={{ background: 'var(--color-bg)' }}
+                  >
+                    <span className="text-xl flex-none mt-0.5">{ISSUE_ICONS[issue.type] ?? '⚠️'}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] font-medium text-text-primary">{issue.message}</div>
+                      <div className="text-[11.5px] text-text-hint mt-0.5">Mit KI beheben →</div>
+                    </div>
+                    <span
+                      className="flex-none text-[11px] font-semibold px-2 py-0.5 rounded-full self-start mt-0.5"
+                      style={{ background: 'var(--color-surface)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border-strong)' }}
+                    >
+                      {issue.count}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </motion.section>
+        )}
 
         {/* Saved quick actions */}
         <motion.section

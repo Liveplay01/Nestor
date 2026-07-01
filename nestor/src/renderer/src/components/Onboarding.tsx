@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '../store/useStore'
-import type { AiMode } from '../../../shared/types'
+import type { AiMode, Persona } from '../../../shared/types'
 import NestorLogo from './NestorLogo'
 
 const ACCENT = '#2563EB'
@@ -19,6 +19,7 @@ type Step =
   | 'install-ollama'
   | 'pull-model'
   | 'choose-folder'
+  | 'persona'
   | 'done'
   | 'error'
 
@@ -174,10 +175,8 @@ export default function Onboarding(): React.JSX.Element {
 
   const handleConfirmFolder = async (): Promise<void> => {
     if (!chosenFolder) return
-    await window.nestor.settings.set({ rootFolder: chosenFolder, onboardingComplete: true })
-    const settings = await window.nestor.settings.get()
-    setSettings(settings)
-    setStep('done')
+    await window.nestor.settings.set({ rootFolder: chosenFolder })
+    setStep('persona')
   }
 
   const handleFinish = (): void => setOnboardingComplete(true)
@@ -407,6 +406,52 @@ export default function Onboarding(): React.JSX.Element {
                 </svg>
                 Deine Dateien werden niemals verändert oder gelöscht — Nestor liest sie nur.
               </p>
+            </div>
+          )}
+
+          {step === 'persona' && (
+            <div>
+              <div className="text-[20px] font-semibold text-text-primary mb-1.5 tracking-tight">Was organisierst du hauptsächlich?</div>
+              <div className="text-[13.5px] text-text-faint leading-relaxed mb-5">
+                Nestor passt seine Vorschläge an deinen Schwerpunkt an. Du kannst das jederzeit in den Einstellungen ändern.
+              </div>
+              <div className="grid grid-cols-2 gap-2.5 mb-5">
+                {([
+                  { id: 'downloads_only' as Persona, icon: '📥', label: 'Downloads & Dateichaos', desc: 'Hauptsächlich Downloads aufräumen' },
+                  { id: 'photos' as Persona, icon: '📸', label: 'Fotos & Medien', desc: 'Bilder nach Datum oder Ereignis sortieren' },
+                  { id: 'invoices' as Persona, icon: '🧾', label: 'Rechnungen & Dokumente', desc: 'Steuer, Verträge, Belege ordnen' },
+                  { id: 'school' as Persona, icon: '🎒', label: 'Schule & Studium', desc: 'Unterlagen und Aufgaben strukturieren' }
+                ]).map(({ id, icon, label, desc }) => (
+                  <button
+                    key={id}
+                    onClick={async () => {
+                      await window.nestor.settings.set({ persona: id, onboardingComplete: true })
+                      const s = await window.nestor.settings.get()
+                      setSettings(s)
+                      setStep('done')
+                    }}
+                    className="flex flex-col items-start gap-2 p-4 rounded-xl border text-left transition-all hover:border-[#2563EB] hover:bg-[#F0F4FF]"
+                    style={{ borderColor: '#EAEAED', background: '#FBFBFC' }}
+                  >
+                    <span className="text-[26px] leading-none">{icon}</span>
+                    <div>
+                      <div className="text-[13px] font-semibold text-text-primary">{label}</div>
+                      <div className="text-[11.5px] text-text-faint mt-0.5">{desc}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={async () => {
+                  await window.nestor.settings.set({ onboardingComplete: true })
+                  const s = await window.nestor.settings.get()
+                  setSettings(s)
+                  setStep('done')
+                }}
+                className="w-full text-center text-[12.5px] text-text-hint hover:text-text-muted transition-colors py-1"
+              >
+                Überspringen
+              </button>
             </div>
           )}
 

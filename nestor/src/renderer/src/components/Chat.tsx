@@ -66,7 +66,7 @@ const WORKFLOW_CARDS = [
     ),
     title: 'Desktop aufräumen',
     desc: 'Chaos sortieren und Struktur schaffen',
-    prompt: 'Analysiere meinen Wurzelordner und schlage eine sinnvolle Ordnerstruktur vor'
+    prompt: 'Analysiere meinen Hauptordner und schlage eine sinnvolle Ordnerstruktur vor'
   },
   {
     icon: (
@@ -525,6 +525,8 @@ export default function Chat(): React.JSX.Element {
   const [atQuery, setAtQuery] = useState<string | null>(null)
   const [atStartIdx, setAtStartIdx] = useState(-1)
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([])
+  const [expandedReasonSet, setExpandedReasonSet] = useState<Set<number>>(new Set())
+  const [conflictPending, setConflictPending] = useState<{ action: PendingAction; existing: ConflictInfo; remainingActions: PendingAction[] } | null>(null)
   const [agentMode, setAgentMode] = useState(false)
   const [agentIteration, setAgentIteration] = useState(0)
   const agentStopRef = useRef(false)
@@ -620,6 +622,10 @@ export default function Chat(): React.JSX.Element {
 
   // IPC stream handlers — tokens go directly to DOM via RAF, zero store updates
   const executeActions = useCallback(async (actions: Record<string, string>[]): Promise<boolean> => {
+    if (useStore.getState().settings?.readOnlyMode) {
+      addToast({ type: 'info', message: 'Nur-Anschauen-Modus aktiv – Nestor ändert keine Dateien.' })
+      return false
+    }
     let hadToolResult = false
     for (const action of actions) {
       try {
@@ -707,8 +713,15 @@ export default function Chat(): React.JSX.Element {
         }
         if (item) addHistoryItem(item)
       } catch (e) {
-        console.error('Action error:', action, e)
-        addToast({ type: 'error', message: 'Aktion fehlgeschlagen. Bitte erneut versuchen.' })
+        const errMsg = e instanceof Error ? e.message : String(e)
+        if (errMsg.includes('protected_path')) {
+          addToast({ type: 'error', message: 'Gesicherter Ordner – Nestor darf hier nicht schreiben.' })
+        } else if (errMsg.includes('read_only_mode')) {
+          addToast({ type: 'info', message: 'Nur-Anschauen-Modus aktiv – keine Änderungen.' })
+        } else {
+          console.error('Action error:', action, e)
+          addToast({ type: 'error', message: 'Aktion fehlgeschlagen. Bitte erneut versuchen.' })
+        }
       }
     }
     return hadToolResult
@@ -879,6 +892,20 @@ export default function Chat(): React.JSX.Element {
   const handleAnchor = useCallback((msg: Message) => {
     addAnchor({ id: randomId(), text: msg.text.slice(0, 60) + (msg.text.length > 60 ? '…' : ''), time: msg.time ?? formatTime(new Date()), messageId: msg.id })
   }, [addAnchor])
+
+  const handleConflictResolve = useCallback(async (resolution: ConflictResolution) => {
+    if (!conflictPending) return
+    const { action, remainingActions } = conflictPending
+    setConflictPending(null)
+    if (resolution === 'keep_existing' || resolution === 'skip') {
+      if (remainingActions.length > 0) await executeActions(remainingActions)
+      return
+    }
+    const to = action.to as string
+    const dot = to.lastIndexOf('.')
+    const newTo = dot > 0 ? `${to.slice(0, dot)}_Kopie${to.slice(dot)}` : `${to}_Kopie`
+    await executeActions([{ ...action, to: newTo }, ...remainingActions])
+  }, [conflictPending, executeActions])
 
   // ── Input handling ────────────────────────────────────────
   const handleInputChange = (value: string) => {
@@ -1076,6 +1103,24 @@ export default function Chat(): React.JSX.Element {
         </div>
       </div>
 
+      {/* Read-only mode banner */}
+      {settings?.readOnlyMode && (
+        <div className="flex items-center gap-2 px-5 py-2 border-b text-[12px] font-medium" style={{ background: '#FEF9C3', borderColor: '#FDE047', color: '#854D0E' }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+            <line x1="1" y1="1" x2="23" y2="23"/>
+          </svg>
+          Nur-Anschauen-Modus aktiv – Nestor ändert keine Dateien
+          <button
+            onClick={() => window.nestor.settings.set({ readOnlyMode: false })}
+            className="ml-auto text-[11.5px] font-semibold underline hover:opacity-70 transition-opacity"
+          >
+            Deaktivieren
+          </button>
+        </div>
+      )}
+
       {/* Messages */}
       <div ref={msgRef} className="flex-1 min-h-0 overflow-y-auto py-7" style={{ scrollBehavior: 'smooth' }}>
         {messages.length === 0 ? (
@@ -1151,7 +1196,7 @@ export default function Chat(): React.JSX.Element {
               style={{ borderColor: 'var(--color-border)' }}
             >
               <div className="flex items-center gap-2">
-                <span className="text-[12px] font-semibold text-text-primary">Geplante Aktionen</span>
+                <span className="text-[12px] font-semibold text-text-primary">Geplante Änderungen</span>
                 <span
                   className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded-md"
                   style={{ background: 'var(--color-accent)', color: '#fff' }}
@@ -1160,7 +1205,7 @@ export default function Chat(): React.JSX.Element {
                 </span>
               </div>
               <button
-                onClick={() => { setPendingActions([]); addToast({ type: 'info', message: 'Aktionen abgebrochen.' }) }}
+                onClick={() => { setPendingActions([]); setExpandedReasonSet(new Set()); addToast({ type: 'info', message: 'Aktionen abgebrochen.' }) }}
                 className="flex items-center justify-center rounded text-text-faint transition-colors hover:text-text-muted"
                 style={{ width: 22, height: 22 }}
               >
@@ -1170,13 +1215,39 @@ export default function Chat(): React.JSX.Element {
               </button>
             </div>
 
-            <div className="px-4 py-2.5 flex flex-col gap-2">
+            <div className="px-4 py-2.5 flex flex-col gap-2.5">
               {pendingActions.map((action, i) => {
-                const { icon, label, accent } = describeAction(action)
+                const { icon, label, accent, riskLevel, reason, beforeAfter } = describeAction(action)
+                const badge = RISK_BADGE[riskLevel]
+                const isExpanded = expandedReasonSet.has(i)
                 return (
-                  <div key={i} className="flex items-center gap-2.5">
-                    <span className="flex-none" style={{ color: accent }}>{icon}</span>
-                    <span className="text-[12.5px] text-text-secondary truncate">{label}</span>
+                  <div key={i} className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2.5">
+                      <span className="flex-none" style={{ color: accent }}>{icon}</span>
+                      <span className="text-[12.5px] text-text-secondary truncate flex-1">{label}</span>
+                      <span className="flex-none text-[10.5px] font-semibold px-1.5 py-0.5 rounded-md" style={{ background: badge.bg, color: badge.fg }}>
+                        {badge.label}
+                      </span>
+                      {reason && (
+                        <button
+                          onClick={() => setExpandedReasonSet(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n })}
+                          className="flex-none text-[11px] text-text-hint hover:text-text-muted transition-colors underline"
+                        >
+                          Warum?
+                        </button>
+                      )}
+                    </div>
+                    {isExpanded && reason && (
+                      <div className="ml-[21px] text-[11.5px] text-text-hint leading-snug pl-2.5" style={{ borderLeft: '2px solid var(--color-border)' }}>
+                        {reason}
+                      </div>
+                    )}
+                    {beforeAfter && (
+                      <div className="ml-[21px] flex flex-col gap-0.5">
+                        <span className="text-[11px] text-text-hint">Von: <span className="font-mono text-[10.5px] text-text-muted">{beforeAfter.before}</span></span>
+                        <span className="text-[11px] text-text-hint">Nach: <span className="font-mono text-[10.5px] text-text-muted">{beforeAfter.after}</span></span>
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -1187,7 +1258,7 @@ export default function Chat(): React.JSX.Element {
               style={{ borderColor: 'var(--color-border)' }}
             >
               <button
-                onClick={() => { setPendingActions([]); addToast({ type: 'info', message: 'Aktionen abgebrochen.' }) }}
+                onClick={() => { setPendingActions([]); setExpandedReasonSet(new Set()); addToast({ type: 'info', message: 'Aktionen abgebrochen.' }) }}
                 className="h-8 px-3.5 rounded-lg border border-border-strong text-[12.5px] font-medium text-text-muted transition-colors hover:bg-surface"
                 style={{ background: 'var(--color-bg)' }}
               >
@@ -1195,19 +1266,46 @@ export default function Chat(): React.JSX.Element {
               </button>
               <button
                 onClick={async () => {
+                  if (settings?.readOnlyMode) {
+                    addToast({ type: 'info', message: 'Nur-Anschauen-Modus aktiv – keine Änderungen.' })
+                    return
+                  }
                   const actions = pendingActions
+                  const moveCopy = actions.find(a => (a.tool === 'move_file' || a.tool === 'copy_file') && a.to)
+                  if (moveCopy) {
+                    try {
+                      const conflict = await window.nestor.fs.checkConflict(moveCopy.to as string)
+                      if (conflict.exists) {
+                        setPendingActions([])
+                        setExpandedReasonSet(new Set())
+                        setConflictPending({ action: moveCopy, existing: conflict, remainingActions: actions.filter(a => a !== moveCopy) })
+                        return
+                      }
+                    } catch { /* non-fatal */ }
+                  }
                   setPendingActions([])
+                  setExpandedReasonSet(new Set())
                   await executeActions(actions)
                 }}
                 className="h-8 px-3.5 rounded-lg text-[12.5px] font-medium text-white transition-opacity hover:opacity-90"
                 style={{ background: 'var(--color-accent)' }}
               >
-                Alles ausführen
+                Änderungen starten
               </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Conflict resolution dialog */}
+      {conflictPending && (
+        <ConflictDialog
+          fileName={basename(conflictPending.action.to as string)}
+          existing={conflictPending.existing}
+          onResolve={handleConflictResolve}
+          onCancel={() => setConflictPending(null)}
+        />
+      )}
 
       {/* Input area */}
       <div className="px-6 pb-5 pt-3">
